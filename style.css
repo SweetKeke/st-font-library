@@ -62,15 +62,15 @@
 }
 #kk-font-library-panel .kkfl-form {display:flex; flex-direction:column; gap:7px; margin:6px 0;}
 #kk-font-library-panel .kkfl-check {display:flex;gap:7px;align-items:center;}
-#kk-font-library-panel .kkfl-file-picker {display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0;}
+#kk-font-library-panel .kkfl-file-picker {display:flex; flex-direction:column; align-items:stretch; gap:5px; min-width:0;}
 #kk-font-library-panel #kkfl-local-file {display:none;}
 #kk-font-library-panel #kkfl-choose-local {
-  display: inline-flex;
+  display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: auto;
-  min-width: max-content;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   height: auto;
   margin: 0;
@@ -80,6 +80,33 @@
   line-height: 1.4;
 }
 #kk-font-library-panel #kkfl-local-filename {min-width:0; overflow-wrap:anywhere;}
+#kk-font-library-panel :is(#kkfl-add-local, #kkfl-add-remote) {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: max-content;
+  max-width: 100%;
+  margin: 3px 0 0;
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--SmartThemeBodyColor, inherit);
+  opacity: .75;
+  line-height: 1.4;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+}
+#kk-font-library-panel :is(#kkfl-add-local, #kkfl-add-remote):not(:disabled):hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+#kk-font-library-panel :is(#kkfl-add-local, #kkfl-add-remote):disabled {
+  opacity: .35;
+  cursor: default;
+}
 
 #kk-font-library-panel #kkfl-status {min-height:1em; font-size:.9em;}
 #kk-font-library-panel #kkfl-status.error {color:#e46b6b;}
