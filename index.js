@@ -332,7 +332,8 @@ function createUI() {
       <div class="inline-drawer-toggle inline-drawer-header"><b>字体收藏夹 · Font Library</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>
       <div class="inline-drawer-content kkfl-content">
         <button id="kkfl-migrate" type="button" hidden>导入此浏览器已有收藏</button>
-        <div class="kkfl-top"><span id="kkfl-current"></span><button id="kkfl-update-extension" type="button" class="menu_button" title="检查并更新字体库插件"><i class="fa-solid fa-rotate" aria-hidden="true"></i> 更新插件</button></div>
+        <div class="kkfl-update-row"><button id="kkfl-update-extension" type="button" class="menu_button" title="检查并更新字体库插件"><i class="fa-solid fa-rotate" aria-hidden="true"></i> 更新插件</button></div>
+        <div class="kkfl-top"><span id="kkfl-current"></span></div>
         <label><input id="kkfl-toggle" type="checkbox" /> 启用字体覆盖</label>
         <label for="kkfl-scope">字体应用范围</label><select id="kkfl-scope"><option value="chat">仅聊天正文与角色名</option><option value="global">主要酒馆界面和聊天内容</option></select>
         <label><input id="kkfl-adjust-body" type="checkbox" /> 将预览字重用于聊天正文</label>
