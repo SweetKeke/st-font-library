@@ -89,23 +89,34 @@
   min-width: max-content;
   max-width: 100%;
   margin: 3px 0 0;
-  padding: 5px 12px;
-  border: 0;
+  padding: 5px 14px;
+  border: 1px solid var(--SmartThemeBorderColor, #aaa);
+  border-radius: 5px;
   background: transparent;
   box-shadow: none;
   color: var(--SmartThemeBodyColor, inherit);
-  opacity: .75;
+  opacity: .8;
   line-height: 1.4;
   white-space: nowrap;
   writing-mode: horizontal-tb;
+  transition: opacity .22s ease, background-color .22s ease, border-color .22s ease, transform .18s ease;
 }
 #kk-font-library-panel :is(#kkfl-add-local, #kkfl-add-remote):not(:disabled):hover {
   opacity: 1;
-  text-decoration: underline;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+#kk-font-library-panel :is(#kkfl-add-local, #kkfl-add-remote):not(:disabled):active {
+  transform: translateY(1px);
+  background: color-mix(in srgb, currentColor 10%, transparent);
 }
 #kk-font-library-panel :is(#kkfl-add-local, #kkfl-add-remote):disabled {
-  opacity: .35;
+  opacity: .4;
   cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  #kk-font-library-panel :is(#kkfl-add-local, #kkfl-add-remote) {
+    transition: none;
+  }
 }
 
 #kk-font-library-panel #kkfl-status {min-height:1em; font-size:.9em;}
