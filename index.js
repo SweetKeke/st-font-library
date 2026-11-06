@@ -143,11 +143,18 @@ async function onlineFamily(url) {
 }
 function weightStyle(item, value) {
   const target = validWeight(value);
-  // Online families may provide real weights: prefer them unless simulation was requested.
-  if (!item || item.variable || (item.type === 'remote' && !item.simulate && !onlineBase)) return {weight:target, stroke:0, alpha:100};
+  // Native variable and multi-weight families keep their real font-weight.
+  if (!item || item.variable || (item.type === 'remote' && !item.simulate)) {
+    return {weight:target, stroke:0, alpha:100};
+  }
   const base = validWeight(item.fileWeight || onlineBase || 400);
   const delta = (target - base) / 100;
-  return {weight:base, stroke:Math.max(0, delta) * 0.012, alpha:100 + Math.min(0, delta) * 6};
+  // A softer nonlinear curve limits stroke buildup in dense glyphs.
+  // Static faces cannot actually lose stroke width; lightening below base
+  // is a visual approximation, kept gentle to preserve contrast.
+  const stroke = delta > 0 ? Math.min(0.042, 0.008 * delta + 0.002 * Math.sqrt(delta)) : 0;
+  const alpha = delta < 0 ? Math.max(88, 100 - 4 * Math.pow(-delta, 0.8)) : 100;
+  return {weight:base, stroke, alpha};
 }
 function cssSelectors(scope) {
   if (scope === 'global') return [
@@ -167,6 +174,7 @@ function injectCSS(family) {
   let rules = selectors.map(s => `${s}:not(#${PANEL_ID}):not(#${PANEL_ID} *) { ${declaration} }`).join('\n');
   if (settings.adjustBody) {
     let bodyStyle = `font-weight: ${weight};`;
+    if (item && (item.type === 'local' && !item.variable || item.type === 'remote' && item.simulate)) bodyStyle += ' font-synthesis-weight: none;';
     if (stroke) bodyStyle += ` -webkit-text-stroke-width: ${stroke}em;`;
     if (alpha < 100) bodyStyle += ` -webkit-text-fill-color: color-mix(in srgb, currentColor ${alpha}%, transparent);`;
     rules += `\n@layer kkflDefaults { :where(#chat .mes_text) { ${bodyStyle} } }`;
@@ -314,9 +322,10 @@ function updatePreview(value = settings.weight) {
   const {weight, stroke, alpha} = weightStyle(item, value);
   el.style.webkitTextStrokeWidth = settings.enabled && stroke ? stroke + 'em' : '';
   el.style.webkitTextFillColor = settings.enabled && alpha < 100 ? `color-mix(in srgb, currentColor ${alpha}%, transparent)` : '';
-  if(!item || !settings.enabled) { el.style.fontFamily=''; el.style.fontWeight=''; return; }
+  if(!item || !settings.enabled) { el.style.fontFamily=''; el.style.fontWeight=''; el.style.fontSynthesisWeight=''; return; }
   el.style.fontFamily=quoteCss(item.type==='remote'?item.family:`kkfl-${item.id.replace(/[^a-zA-Z0-9_-]/g,'')}`);
   el.style.fontWeight=String(weight);
+  el.style.fontSynthesisWeight = (item.type === 'local' && !item.variable || item.type === 'remote' && item.simulate) ? 'none' : '';
 }
 function makeEl(tag, id, text, attrs={}) {
   const e=document.createElement(tag); if(id)e.id=id;if(text!==undefined&&text!==null)e.textContent=text;
