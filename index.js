@@ -10,8 +10,9 @@ const PREVIEW_SAMPLES = {
   en: '“Still awake?” The quick brown fox jumps over the lazy dog!',
   ko: '창가에 달빛이 비쳤다. “그 편지, 아직 기억해?”',
 };
-const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, adjustBody: false, scope: 'chat' };
+const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, adjustBody: false, scope: 'chat', pageSize: 10 };
 let settings, save;
+let currentPage = 1;
 let storageKey;
 let shared = false;
 const api = '/api/plugins/st-font-library';
@@ -245,9 +246,14 @@ function setActiveLabel() {
 function renderList() {
   const list = byId('kkfl-list');
   if (!list) return;
+  const pageSize = Math.max(1, Math.min(100, Number(settings.pageSize) || 10));
+  const totalPages = Math.max(1, Math.ceil(settings.entries.length / pageSize));
+  currentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const start = (currentPage - 1) * pageSize;
   list.replaceChildren();
+  list.scrollTop = 0;
   if (!settings.entries.length) { const blank = document.createElement('p'); blank.className='kkfl-muted'; blank.textContent='字体库为空，先在下方添加字体。'; list.append(blank); }
-  for (const entry of settings.entries) {
+  for (const entry of settings.entries.slice(start, start + pageSize)) {
     const row = document.createElement('div'); row.className='kkfl-entry';
     const radio = document.createElement('input'); radio.type='radio'; radio.name='kkfl-selected'; radio.checked=entry.id===settings.activeId; radio.setAttribute('aria-label', `选择 ${entry.name}`);
     radio.addEventListener('change', () => { settings.activeId=entry.id; save(); apply().catch(e => info(e.message, true)); renderList(); });
@@ -277,6 +283,14 @@ function renderList() {
     del.classList.add('menu_button');
     row.append(radio,label,rename,del); list.append(row);
   }
+  const pageInput = byId('kkfl-page-size');
+  if (pageInput && document.activeElement !== pageInput) pageInput.value = String(pageSize);
+  const pageIndicator = byId('kkfl-page-indicator');
+  if (pageIndicator) pageIndicator.textContent = currentPage + ' / ' + totalPages;
+  const prev = byId('kkfl-page-prev');
+  const next = byId('kkfl-page-next');
+  if (prev) prev.disabled = currentPage <= 1;
+  if (next) next.disabled = currentPage >= totalPages;
   const current = byId('kkfl-current'); if (current) setActiveLabel();
   byId('kkfl-migrate').hidden = !shared || !JSON.parse(localStorage.getItem(storageKey) || '{}').entries?.length;
   const w = byId('kkfl-weight'); if (w) w.value=String(settings.weight);
@@ -325,6 +339,15 @@ function createUI() {
           <div id="kkfl-preview" class="kkfl-preview"></div>
         </div>
         <div class="kkfl-title kkfl-list-title">已添加字体</div><div id="kkfl-list"></div>
+        <div class="kkfl-pagination">
+          <label for="kkfl-page-size">每页显示</label>
+          <input id="kkfl-page-size" type="number" min="1" max="100" step="1" value="10" aria-label="每页字体数量" />
+          <span>条</span>
+          <span class="kkfl-page-spacer"></span>
+          <button type="button" id="kkfl-page-prev" class="menu_button" aria-label="上一页" title="上一页">‹</button>
+          <span id="kkfl-page-indicator" aria-live="polite">1 / 1</span>
+          <button type="button" id="kkfl-page-next" class="menu_button" aria-label="下一页" title="下一页">›</button>
+        </div>
         <div class="kkfl-form"><div class="kkfl-title">添加在线 CSS 字体</div>
           <label for="kkfl-remote-name">收藏名称（选填）</label><input id="kkfl-remote-name" type="text" placeholder="默认使用识别出的字体名" />
           <label for="kkfl-remote-family">CSS 字体名（选填）</label><input id="kkfl-remote-family" type="text" placeholder="留空时从 CSS 链接识别" />
@@ -373,6 +396,16 @@ function createUI() {
       info(missing.length ? '其余已导入。本浏览器缺少文件：'+missing.join('、') : '已有收藏已合并到酒馆字体库。');
     } catch(e){info(e.message,true);}finally{renderList();root.inert=false;}
   });
+  byId('kkfl-page-size').addEventListener('change', e => {
+    const n = Math.round(Number(e.target.value));
+    settings.pageSize = Number.isFinite(n) ? Math.max(1, Math.min(100, n)) : 10;
+    currentPage = 1;
+    e.target.value = String(settings.pageSize);
+    save();
+    renderList();
+  });
+  byId('kkfl-page-prev').addEventListener('click', () => { currentPage--; renderList(); });
+  byId('kkfl-page-next').addEventListener('click', () => { currentPage++; renderList(); });
   byId('kkfl-toggle').addEventListener('change',e=>{settings.enabled=e.target.checked;save();apply().catch(e=>info(e.message,true));renderList();});
   byId('kkfl-adjust-body').addEventListener('change', e => {
     settings.adjustBody = e.target.checked;
@@ -439,6 +472,7 @@ async function boot() {
   for (const [k,v] of Object.entries(DEFAULTS)) if (!(k in settings)) settings[k]=structuredClone(v);
   if(!Array.isArray(settings.entries))settings.entries=[];
   if(!['chat','global'].includes(settings.scope))settings.scope='chat';
+  settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
   save = () => {
     if(shared){
       const {entries,...prefs}=settings;
@@ -458,6 +492,7 @@ async function boot() {
   }
   try {
     settings = await readShared();
+    settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
     shared = true;
   }catch(e){console.warn('[Font Library]',e.message);}
   await apply().catch(e=>console.error('[Font Library]', e));
