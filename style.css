@@ -3,6 +3,11 @@
 #kk-font-library-panel label { font-size: 0.93em; }
 #kk-font-library-panel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 #kk-font-library-panel select, #kk-font-library-panel textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+/* Keep hint text quieter than the field labels and typed values. */
+#kk-font-library-panel :is(#kkfl-remote-name, #kkfl-remote-family, #kkfl-local-name)::placeholder {
+  font-size: .86em;
+}
+
 #kk-font-library-panel .kkfl-update-row {
   display: flex;
   align-items: center;
