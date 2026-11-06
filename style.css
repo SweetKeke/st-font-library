@@ -52,7 +52,8 @@
 #kk-font-library-panel .kkfl-title {font-weight:700; border-bottom:1px solid var(--SmartThemeBorderColor, #aaa); padding:5px 0; margin-top:7px;}
 #kk-font-library-panel .kkfl-muted {opacity:.7; font-size:.84em; line-height:1.5;}
 #kk-font-library-panel .kkfl-preview-box {border:1px solid var(--SmartThemeBorderColor, #aaa); border-radius:8px; padding:12px 14px; background:color-mix(in srgb, currentColor 4%, transparent); display:flex; flex-direction:column; gap:8px;}
-#kk-font-library-panel #kkfl-preview-language {float:none; align-self:flex-end; width:auto; max-width:100%; margin:0; font-size:.9em;}
+#kk-font-library-panel .kkfl-preview-controls { display:flex; justify-content:flex-end; align-items:center; margin-top:-3px; }
+#kk-font-library-panel #kkfl-preview-language {float:none; width:auto; max-width:100%; margin:0; font-size:.9em;}
 #kk-font-library-panel .kkfl-preview {width:100%; line-height:1.8; overflow-wrap:anywhere; font-size:1.1em;}
 #kk-font-library-panel #kkfl-list {
   --kkfl-row-height: 32px;
