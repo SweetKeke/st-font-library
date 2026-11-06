@@ -457,10 +457,8 @@ async function boot() {
     }
   }
   try {
-    const next = await readShared();
-    if(next.entries.length || !settings.entries.length){
-      shared=true;settings=next;
-    }
+    settings = await readShared();
+    shared = true;
   }catch(e){console.warn('[Font Library]',e.message);}
   await apply().catch(e=>console.error('[Font Library]', e));
   if(createUI())return;

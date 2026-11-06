@@ -22,3 +22,4 @@ https://github.com/SweetKeke/st-font-library
 仅通过仓库链接安装时，收藏列表和偏好保存在当前浏览器的 localStorage，本地字体保存在 IndexedDB。刷新后仍可使用；清除站点数据会清除这些收藏。在线字体需要联网访问原站。
 
 如需在同一酒馆账号下跨浏览器收藏，可由酒馆管理员将本仓库的 `server/st-font-library` 文件夹复制到 **SillyTavern 安装目录**的 `plugins/` 下，确认酒馆已启用服务端插件后重启。配套服务把收藏逐项保存在当前账号数据目录的 `st-font-library/` 中。只有前端扩展时无需此步骤。
+原浏览器已有收藏时，连接配套服务后可点「导入此浏览器已有收藏」批量合并。
