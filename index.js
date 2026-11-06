@@ -357,7 +357,7 @@ function createUI() {
         </div>
         <div class="kkfl-form"><div class="kkfl-title">添加本地字体文件</div>
           <label for="kkfl-local-name">收藏名称（选填）</label><input id="kkfl-local-name" type="text" placeholder="自动使用字体内置名称或文件名" />
-          <label for="kkfl-local-file">字体文件</label><input id="kkfl-local-file" type="file" accept=".woff2,.woff,.ttf,.otf,font/woff,font/woff2,font/ttf,font/otf" />
+          <label for="kkfl-local-file">字体文件</label><div class="kkfl-file-picker"><input id="kkfl-local-file" type="file" accept=".woff2,.woff,.ttf,.otf,font/woff,font/woff2,font/ttf,font/otf" hidden /><button type="button" id="kkfl-choose-local" class="menu_button">选择字体文件</button><span id="kkfl-local-filename" class="kkfl-muted">未选择文件</span></div>
           <label class="kkfl-check"><input type="checkbox" id="kkfl-local-variable" /> 这是可变字体（支持 100–900 字重）</label>
           <label for="kkfl-file-weight">普通字体文件的原始字重</label><select id="kkfl-file-weight"><option value="400">400 常规</option><option value="100">100</option><option value="200">200</option><option value="300">300</option><option value="500">500</option><option value="600">600</option><option value="700">700 粗体</option><option value="800">800</option><option value="900">900</option></select>
           <button type="button" id="kkfl-add-local">添加本地字体</button>
@@ -440,6 +440,10 @@ function createUI() {
       byId('kkfl-remote-name').value='';byId('kkfl-remote-family').value='';byId('kkfl-remote-url').value='';
     } catch(e) {info(e.message,true);} finally { root.inert = false; }
   });
+  byId('kkfl-choose-local').addEventListener('click', () => byId('kkfl-local-file').click());
+  byId('kkfl-local-file').addEventListener('change', e => {
+    byId('kkfl-local-filename').textContent = e.target.files?.[0]?.name || '未选择文件';
+  });
   byId('kkfl-add-local').addEventListener('click',async()=>{
     const button=byId('kkfl-add-local');
     try {
@@ -455,7 +459,7 @@ function createUI() {
       else await dbAct('readwrite',id,file);
       settings.entries.push(item);
       settings.activeId=id;settings.enabled=true;save();renderList();await apply();
-      info(`已添加本地字体「${name}」。`);byId('kkfl-local-name').value='';byId('kkfl-local-file').value='';
+      info(`已添加本地字体「${name}」。`);byId('kkfl-local-name').value='';byId('kkfl-local-file').value='';byId('kkfl-local-filename').textContent='未选择文件';
     }catch(e){info(e.message,true);}finally{button.disabled=false;root.inert=false;}
   });
   renderList();
