@@ -12,9 +12,39 @@
 #kk-font-library-panel .kkfl-preview {line-height:1.8; overflow-wrap:anywhere; font-size:1.1em;}
 #kk-font-library-panel #kkfl-list {
   --kkfl-row-height: 32px;
-  max-height: calc(4 * var(--kkfl-row-height));
+  max-height: min(calc(10 * var(--kkfl-row-height)), 50vh);
   overflow-y: auto;
   scrollbar-width: thin;
+}
+#kk-font-library-panel .kkfl-pagination {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.85em;
+}
+#kk-font-library-panel .kkfl-pagination label { font-size: inherit; }
+#kk-font-library-panel #kkfl-page-size {
+  width: 52px;
+  min-width: 0;
+  padding: 3px 5px;
+  text-align: center;
+  font: inherit;
+}
+#kk-font-library-panel .kkfl-page-spacer { flex: 1; }
+#kk-font-library-panel .kkfl-pagination button {
+  margin: 0;
+  padding: 2px 7px;
+  min-width: 24px;
+}
+#kk-font-library-panel .kkfl-pagination button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+#kk-font-library-panel #kkfl-page-indicator {
+  min-width: 36px;
+  text-align: center;
+  white-space: nowrap;
 }
 #kk-font-library-panel .kkfl-entry {
   display:flex; align-items:center; gap:6px; box-sizing:border-box;
