@@ -10,7 +10,7 @@ const PREVIEW_SAMPLES = {
   en: '“Still awake?” The quick brown fox jumps over the lazy dog!',
   ko: '창가에 달빛이 비쳤다. “그 편지, 아직 기억해?”',
 };
-const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, adjustBody: false, scope: 'chat', pageSize: 10, experimentalThinPreview: false };
+const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, adjustBody: false, scope: 'chat', pageSize: 10, previewBoldMode: 'stroke' };
 let settings, save;
 let currentPage = 1;
 let storageKey;
@@ -312,30 +312,30 @@ function renderList() {
   updatePreview();
 }
 function updatePreview(value = settings.weight) {
-  const el=byId('kkfl-preview'); if(!el) return;
-  const item=settings.entries.find(x=>x.id===settings.activeId);
+  const el = byId('kkfl-preview'); if (!el) return;
+  const item = settings.entries.find(x => x.id === settings.activeId);
   const {weight, stroke, alpha} = weightStyle(item, value);
-  const target = validWeight(value);
-  // Preview-only experiment: erode the visible alpha mask of static-font glyphs.
-  // The chat body keeps the original weightStyle() calculation untouched.
-  const staticFace = item && !item.variable &&
+  // The native synthesis experiment applies to preview only.
+  // Chat CSS and the existing weightStyle() logic remain unchanged.
+  const isStatic = item && !item.variable &&
     (item.type === 'local' || (item.type === 'remote' && (item.simulate || onlineBase)));
-  const thinPreview = settings.enabled && settings.experimentalThinPreview &&
-    staticFace && target < weight;
-  const morphology = byId('kkfl-thin-morphology');
-  if (thinPreview && morphology) {
-    // A conservative 0–0.8px radius; large values can erase fine strokes.
-    const radius = Math.min(0.8, (weight - target) / 650);
-    morphology.setAttribute('radius', radius.toFixed(3));
-  }
-  el.style.filter = thinPreview && morphology ? 'url("#kkfl-preview-thin-filter")' : '';
-  el.style.webkitTextStrokeWidth = settings.enabled && stroke ? stroke + 'em' : '';
-  el.style.webkitTextFillColor = settings.enabled && !thinPreview && alpha < 100
+  const nativeBold = settings.enabled && isStatic && settings.previewBoldMode === 'native' &&
+    validWeight(value) > weight;
+  el.style.filter = '';
+  el.style.webkitTextStrokeWidth = settings.enabled && !nativeBold && stroke ? stroke + 'em' : '';
+  el.style.webkitTextFillColor = settings.enabled && !nativeBold && alpha < 100
     ? `color-mix(in srgb, currentColor ${alpha}%, transparent)` : '';
-  if(!item || !settings.enabled) { el.style.fontFamily=''; el.style.fontWeight=''; return; }
-  el.style.fontFamily=quoteCss(item.type==='remote'?item.family:`kkfl-${item.id.replace(/[^a-zA-Z0-9_-]/g,'')}`);
-  el.style.fontWeight=String(weight);
+  el.style.fontSynthesisWeight = nativeBold ? 'auto' : '';
+  if (!item || !settings.enabled) {
+    el.style.fontFamily = '';
+    el.style.fontWeight = '';
+    return;
+  }
+  el.style.fontFamily = quoteCss(item.type === 'remote' ? item.family :
+    `kkfl-${item.id.replace(/[^a-zA-Z0-9_-]/g,'')}`);
+  el.style.fontWeight = String(nativeBold ? validWeight(value) : weight);
 }
+
 function makeEl(tag, id, text, attrs={}) {
   const e=document.createElement(tag); if(id)e.id=id;if(text!==undefined&&text!==null)e.textContent=text;
   Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v)); return e;
@@ -358,16 +358,14 @@ function createUI() {
         <label for="kkfl-weight">预览字重 <output id="kkfl-weight-label">400</output></label>
         <input type="range" id="kkfl-weight" min="100" max="900" step="1" value="400" />
         <div class="kkfl-muted">静态字体用描边模拟加粗，较轻的档位会淡化文字。拖动时可在下方预览。</div>
-        <label class="kkfl-check kkfl-thin-experiment"><input id="kkfl-thin-experiment" type="checkbox" /> 实验：笔画收缩（仅预览）</label>
+        <div class="kkfl-bold-mode-row">
+          <label for="kkfl-preview-bold-mode">加粗方式（仅预览）</label>
+          <select id="kkfl-preview-bold-mode" aria-label="预览加粗方式">
+            <option value="stroke">CSS 描边</option>
+            <option value="native">浏览器原生合成</option>
+          </select>
+        </div>
         <div class="kkfl-preview-box">
-          <svg class="kkfl-preview-filter" width="0" height="0" aria-hidden="true" focusable="false">
-            <defs>
-              <filter id="kkfl-preview-thin-filter" x="-10%" y="-20%" width="120%" height="140%" color-interpolation-filters="sRGB">
-                <feMorphology id="kkfl-thin-morphology" in="SourceAlpha" operator="erode" radius="0" result="thinMask"></feMorphology>
-                <feComposite in="SourceGraphic" in2="thinMask" operator="in"></feComposite>
-              </filter>
-            </defs>
-          </svg>
           <div id="kkfl-preview" class="kkfl-preview"></div>
         </div>
         <div class="kkfl-preview-controls">
@@ -496,10 +494,10 @@ function createUI() {
     if (activeFamily) injectCSS(activeFamily);
     save();
   });
-  const thinExperiment = byId('kkfl-thin-experiment');
-  thinExperiment.checked = Boolean(settings.experimentalThinPreview);
-  thinExperiment.addEventListener('change', e => {
-    settings.experimentalThinPreview = e.target.checked;
+  const boldMode = byId('kkfl-preview-bold-mode');
+  boldMode.value = settings.previewBoldMode === 'native' ? 'native' : 'stroke';
+  boldMode.addEventListener('change', e => {
+    settings.previewBoldMode = e.target.value === 'native' ? 'native' : 'stroke';
     save();
     updatePreview(validWeight(byId('kkfl-weight').value));
   });
@@ -568,6 +566,7 @@ async function boot() {
   for (const [k,v] of Object.entries(DEFAULTS)) if (!(k in settings)) settings[k]=structuredClone(v);
   if(!Array.isArray(settings.entries))settings.entries=[];
   if(!['chat','global'].includes(settings.scope))settings.scope='chat';
+  if(!['stroke','native'].includes(settings.previewBoldMode))settings.previewBoldMode='stroke';
   settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
   save = () => {
     if(shared){
@@ -589,6 +588,7 @@ async function boot() {
   try {
     settings = await readShared();
     settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
+    if(!['stroke','native'].includes(settings.previewBoldMode))settings.previewBoldMode='stroke';
     shared = true;
   }catch(e){console.warn('[Font Library]',e.message);}
   await apply().catch(e=>console.error('[Font Library]', e));
