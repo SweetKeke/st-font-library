@@ -71,7 +71,10 @@ async function dbAct(mode, key, value, checkOnly = false) {
     });
   } finally { db.close(); }
 }
-const validWeight = (v) => Math.max(100, Math.min(900, Math.round(Number(v || 400) / 100) * 100));
+const validWeight = (v) => {
+  const weight = Number(v);
+  return Number.isFinite(weight) ? Math.max(100, Math.min(900, Math.round(weight))) : 400;
+};
 function update(fn) { fn(); save(); renderList(); }
 function parseCssLink(input) {
   let value = input.trim();
@@ -338,7 +341,7 @@ function createUI() {
         <label for="kkfl-scope">字体应用范围</label><select id="kkfl-scope"><option value="chat">仅聊天正文与角色名</option><option value="global">主要酒馆界面和聊天内容</option></select>
         <label><input id="kkfl-adjust-body" type="checkbox" /> 将预览字重用于聊天正文</label>
         <label for="kkfl-weight">预览字重 <output id="kkfl-weight-label">400</output></label>
-        <input type="range" id="kkfl-weight" min="100" max="900" step="100" value="400" />
+        <input type="range" id="kkfl-weight" min="100" max="900" step="1" value="400" />
         <div class="kkfl-muted">静态字体用描边模拟加粗，较轻的档位会淡化文字。拖动时可在下方预览。</div>
         <div class="kkfl-preview-box">
           <div id="kkfl-preview" class="kkfl-preview"></div>
