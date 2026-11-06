@@ -144,13 +144,36 @@ async function onlineFamily(url) {
   if (candidate) return candidate;
   throw new Error('无法从这个链接读取字体名。请在“CSS 字体名”中填入字体网站提供的 font-family。');
 }
+// Use actual weight faces whenever they are available; unknown online families
+// also stay native rather than risking a false single-weight classification.
+function usesSimulatedWeight(item) {
+  return Boolean(item && !item.variable &&
+    (item.type === 'local' || (item.type === 'remote' && Number.isFinite(onlineBase))));
+}
 function weightStyle(item, value) {
   const target = validWeight(value);
-  // Online families may provide real weights: prefer them unless simulation was requested.
-  if (!item || item.variable || (item.type === 'remote' && !item.simulate && !onlineBase)) return {weight:target, stroke:0, alpha:100};
-  const base = validWeight(item.fileWeight || onlineBase || 400);
+  if (!usesSimulatedWeight(item)) return {weight:target, stroke:0, alpha:100};
+  const base = validWeight(item.type === 'remote' ? onlineBase : (item.fileWeight || 400));
   const delta = (target - base) / 100;
   return {weight:base, stroke:Math.max(0, delta) * 0.012, alpha:100 + Math.min(0, delta) * 6};
+}
+function detectOnlineSingleWeight(family) {
+  const weights = [];
+  for (const face of document.fonts) {
+    if (face.family.replace(/^['"]|['"]$/g, '').toLowerCase() !== family.toLowerCase()) continue;
+    const raw = String(face.weight).trim().toLowerCase();
+    const values = raw === 'normal' ? [400] : raw === 'bold' ? [700] :
+      raw.split(/\s+/).map(Number);
+    if (!values.length || values.some(n => !Number.isFinite(n))) return undefined;
+    weights.push(...values);
+  }
+  return weights.length > 0 && weights.every(w => w === weights[0]) ? weights[0] : undefined;
+}
+function updateBoldModeControls() {
+  const row = byId('kkfl-bold-mode-row');
+  if (!row) return;
+  const item = settings.entries.find(x => x.id === settings.activeId);
+  row.hidden = !settings.enabled || !usesSimulatedWeight(item);
 }
 function cssSelectors(scope) {
   if (scope === 'global') return [
@@ -202,17 +225,10 @@ async function apply() {
     link.href = item.url;
     link.onload = () => {
       if (token !== currentToken) return;
-      const weights = new Set();
-      for (const face of document.fonts) {
-        if (face.family.replace(/^['"]|['"]$/g, '').toLowerCase() !== family.toLowerCase()) continue;
-        weights.add(face.weight === 'normal' ? '400' : face.weight === 'bold' ? '700' : face.weight);
-      }
-      const [weight] = weights;
-      if (weights.size === 1 && /^\d+$/.test(weight)) {
-        onlineBase = Number(weight);
-        injectCSS(family);
-        updatePreview();
-      }
+      onlineBase = detectOnlineSingleWeight(family);
+      injectCSS(family);
+      updateBoldModeControls();
+      updatePreview();
     };
     document.head.append(link);
   } else {
@@ -238,6 +254,7 @@ async function apply() {
   activeFamily = family;
   injectCSS(family);
   setActiveLabel();
+  updateBoldModeControls();
 }
 function setActiveLabel() {
   const item = settings.entries.find(x => x.id === settings.activeId);
@@ -258,6 +275,7 @@ function setActiveLabel() {
 function renderList() {
   const list = byId('kkfl-list');
   if (!list) return;
+  updateBoldModeControls();
   const pageSize = Math.max(1, Math.min(100, Number(settings.pageSize) || 10));
   const totalPages = Math.max(1, Math.ceil(settings.entries.length / pageSize));
   currentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -317,8 +335,7 @@ function updatePreview(value = settings.weight) {
   const {weight, stroke, alpha} = weightStyle(item, value);
   // The native synthesis experiment applies to preview only.
   // Chat CSS and the existing weightStyle() logic remain unchanged.
-  const isStatic = item && !item.variable &&
-    (item.type === 'local' || (item.type === 'remote' && (item.simulate || onlineBase)));
+  const isStatic = usesSimulatedWeight(item);
   const nativeBold = settings.enabled && isStatic && settings.previewBoldMode === 'native' &&
     validWeight(value) > weight;
   el.style.filter = '';
@@ -358,8 +375,8 @@ function createUI() {
         <label for="kkfl-weight">预览字重 <output id="kkfl-weight-label">400</output></label>
         <input type="range" id="kkfl-weight" min="100" max="900" step="1" value="400" />
         <div class="kkfl-muted">静态字体用描边模拟加粗，较轻的档位会淡化文字。拖动时可在下方预览。</div>
-        <div class="kkfl-bold-mode-row">
-          <label for="kkfl-preview-bold-mode">加粗方式（仅预览）</label>
+        <div class="kkfl-bold-mode-row" id="kkfl-bold-mode-row" hidden>
+          <label for="kkfl-preview-bold-mode">单字重模拟加粗（仅预览）</label>
           <select id="kkfl-preview-bold-mode" aria-label="预览加粗方式">
             <option value="stroke">CSS 描边</option>
             <option value="native">浏览器原生合成</option>
@@ -388,7 +405,6 @@ function createUI() {
         <div class="kkfl-form"><div class="kkfl-title">添加在线 CSS 字体</div>
           <label for="kkfl-remote-name">收藏名称（选填）</label><input id="kkfl-remote-name" type="text" placeholder="默认使用识别出的字体名" />
           <label for="kkfl-remote-family">CSS 字体名（选填）</label><input id="kkfl-remote-family" type="text" placeholder="留空时从 CSS 链接识别" />
-          <label><input id="kkfl-remote-sim" type="checkbox" /> 为单字重在线字体模拟粗细（以 400 为基准）</label>
           <label for="kkfl-remote-url">CSS 地址或整段 @import</label><textarea id="kkfl-remote-url" rows="2" placeholder='@import url("https://fontsapi.zeoseven.com/937/main/result.css");'></textarea>
           <button type="button" id="kkfl-add-remote">添加在线字体</button>
         </div>
@@ -496,6 +512,7 @@ function createUI() {
   });
   const boldMode = byId('kkfl-preview-bold-mode');
   boldMode.value = settings.previewBoldMode === 'native' ? 'native' : 'stroke';
+  updateBoldModeControls();
   boldMode.addEventListener('change', e => {
     settings.previewBoldMode = e.target.value === 'native' ? 'native' : 'stroke';
     save();
@@ -522,7 +539,7 @@ function createUI() {
       const url=parseCssLink(byId('kkfl-remote-url').value);
       const family=validFamily(byId('kkfl-remote-family').value.trim() || await onlineFamily(url));
       const name=byId('kkfl-remote-name').value.trim() || family;
-      const item={id:uuid(),name:name.slice(0,100),family,url,type:'remote',simulate:byId('kkfl-remote-sim').checked};
+      const item={id:uuid(),name:name.slice(0,100),family,url,type:'remote'};
       if(shared)await uploadEntry(item);
       settings.entries.push(item); settings.activeId=item.id; settings.enabled=true;save();renderList();
       apply().then(()=>info('已添加在线字体。如果显示未变化，请确认 CSS 的真实 font-family 名称。')).catch(e=>info(e.message,true));
