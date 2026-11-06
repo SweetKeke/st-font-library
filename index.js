@@ -340,12 +340,12 @@ function createUI() {
         <input type="range" id="kkfl-weight" min="100" max="900" step="100" value="400" />
         <div class="kkfl-muted">静态字体用描边模拟加粗，较轻的档位会淡化文字。拖动时可在下方预览。</div>
         <div class="kkfl-preview-box">
+          <div id="kkfl-preview" class="kkfl-preview"></div>
           <select id="kkfl-preview-language" aria-label="预览语言" title="预览语言">
             <option value="zh-CN">中文</option><option value="ja">日本語</option>
             <option value="en">English</option><option value="ko">한국어</option>
             <option value="all">多语对照</option>
           </select>
-          <div id="kkfl-preview" class="kkfl-preview"></div>
         </div>
         <div class="kkfl-title kkfl-list-title">已添加字体</div><div id="kkfl-list"></div>
         <div class="kkfl-pagination">
