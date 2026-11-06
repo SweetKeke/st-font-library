@@ -14,8 +14,9 @@
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
-  padding: 2px 0 6px;
-  border-bottom: 1px solid var(--SmartThemeBorderColor, #aaa);
+  padding: 2px 0 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
 }
 #kk-font-library-panel .kkfl-update-label {
   font-size: .88em;
