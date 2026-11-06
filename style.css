@@ -37,7 +37,7 @@
 #kk-font-library-panel .kkfl-preview {line-height:1.8; overflow-wrap:anywhere; font-size:1.1em;}
 #kk-font-library-panel #kkfl-list {
   --kkfl-row-height: 32px;
-  max-height: min(calc(10 * var(--kkfl-row-height)), 50vh);
+  height: calc(5 * var(--kkfl-row-height));
   overflow-y: auto;
   scrollbar-width: thin;
 }
