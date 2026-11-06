@@ -4,6 +4,31 @@
 #kk-font-library-panel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 #kk-font-library-panel select, #kk-font-library-panel textarea { width: 100%; min-width: 0; box-sizing: border-box; }
 #kk-font-library-panel .kkfl-top {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+#kk-font-library-panel #kkfl-update-extension {
+  display: inline-flex;
+  width: auto;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 0;
+  padding: 4px 9px;
+  white-space: nowrap;
+  font-size: .85em;
+  line-height: 1.4;
+  border: 1px solid var(--SmartThemeBorderColor, #aaa);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--SmartThemeBodyColor, inherit);
+  transition: background-color .22s ease, opacity .22s ease;
+}
+#kk-font-library-panel #kkfl-update-extension:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+#kk-font-library-panel #kkfl-update-extension:disabled { opacity: .55; cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  #kk-font-library-panel #kkfl-update-extension { transition: none; }
+}
 #kk-font-library-panel #kkfl-current { font-size: 1.15em; font-weight: 600; }
 #kk-font-library-panel .kkfl-title {font-weight:700; border-bottom:1px solid var(--SmartThemeBorderColor, #aaa); padding:5px 0; margin-top:7px;}
 #kk-font-library-panel .kkfl-muted {opacity:.7; font-size:.84em; line-height:1.5;}
