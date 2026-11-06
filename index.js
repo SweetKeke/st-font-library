@@ -323,7 +323,7 @@ function createUI() {
       <div class="inline-drawer-toggle inline-drawer-header"><b>字体收藏夹 · Font Library</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>
       <div class="inline-drawer-content kkfl-content">
         <button id="kkfl-migrate" type="button" hidden>导入此浏览器已有收藏</button>
-        <div class="kkfl-top"><span id="kkfl-current"></span></div>
+        <div class="kkfl-top"><span id="kkfl-current"></span><button id="kkfl-update-extension" type="button" class="menu_button" title="检查并更新字体库插件"><i class="fa-solid fa-rotate" aria-hidden="true"></i> 更新插件</button></div>
         <label><input id="kkfl-toggle" type="checkbox" /> 启用字体覆盖</label>
         <label for="kkfl-scope">字体应用范围</label><select id="kkfl-scope"><option value="chat">仅聊天正文与角色名</option><option value="global">主要酒馆界面和聊天内容</option></select>
         <label><input id="kkfl-adjust-body" type="checkbox" /> 将预览字重用于聊天正文</label>
@@ -379,6 +379,51 @@ function createUI() {
   }
   language.addEventListener('change', showSample);
   showSample();
+  byId('kkfl-update-extension').addEventListener('click', async () => {
+    const button = byId('kkfl-update-extension');
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.textContent = '检查更新中…';
+    try {
+      const { extensionTypes } = await import('/scripts/extensions.js');
+      const extensionId = 'third-party/st-font-library';
+      const extensionType = extensionTypes[extensionId];
+      if (!['local', 'global'].includes(extensionType)) {
+        throw new Error('未能识别字体库的安装位置，请通过「管理扩展程序」更新。');
+      }
+      const payload = { extensionName: 'st-font-library', global: extensionType === 'global' };
+      const request = async path => {
+        const response = await fetch('/api/extensions/' + path, {
+          method: 'POST',
+          headers: window.SillyTavern.getContext().getRequestHeaders(),
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error('更新请求失败（HTTP ' + response.status + '）。请检查酒馆终端日志。');
+        return response.json();
+      };
+      const version = await request('version');
+      if (!version.currentCommitHash) throw new Error('此插件不是通过 Git 安装，无法直接更新。');
+      if (version.isUpToDate) {
+        info('字体库已经是最新版本。');
+        return;
+      }
+      button.textContent = '正在更新…';
+      const result = await request('update');
+      if (result.isUpToDate) {
+        info('字体库已经是最新版本。');
+        return;
+      }
+      info('字体库已更新至 ' + result.shortCommitHash + '。刷新页面后生效。');
+      if (confirm('字体库更新成功。现在刷新页面以启用新版吗？')) {
+        location.reload();
+      }
+    } catch (error) {
+      info('字体库更新失败：' + error.message, true);
+    } finally {
+      button.innerHTML = original;
+      button.disabled = false;
+    }
+  });
   byId('kkfl-migrate').addEventListener('click',async()=>{
     root.inert=true;
     try {
