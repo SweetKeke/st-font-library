@@ -10,7 +10,7 @@ const PREVIEW_SAMPLES = {
   en: '“Still awake?” The quick brown fox jumps over the lazy dog!',
   ko: '창가에 달빛이 비쳤다. “그 편지, 아직 기억해?”',
 };
-const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, adjustBody: false, scope: 'chat', pageSize: 10 };
+const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, adjustBody: false, scope: 'chat', pageSize: 10, experimentalThinPreview: false };
 let settings, save;
 let currentPage = 1;
 let storageKey;
@@ -315,8 +315,23 @@ function updatePreview(value = settings.weight) {
   const el=byId('kkfl-preview'); if(!el) return;
   const item=settings.entries.find(x=>x.id===settings.activeId);
   const {weight, stroke, alpha} = weightStyle(item, value);
+  const target = validWeight(value);
+  // Preview-only experiment: erode the visible alpha mask of static-font glyphs.
+  // The chat body keeps the original weightStyle() calculation untouched.
+  const staticFace = item && !item.variable &&
+    (item.type === 'local' || (item.type === 'remote' && (item.simulate || onlineBase)));
+  const thinPreview = settings.enabled && settings.experimentalThinPreview &&
+    staticFace && target < weight;
+  const morphology = byId('kkfl-thin-morphology');
+  if (thinPreview && morphology) {
+    // A conservative 0–0.8px radius; large values can erase fine strokes.
+    const radius = Math.min(0.8, (weight - target) / 650);
+    morphology.setAttribute('radius', radius.toFixed(3));
+  }
+  el.style.filter = thinPreview && morphology ? 'url("#kkfl-preview-thin-filter")' : '';
   el.style.webkitTextStrokeWidth = settings.enabled && stroke ? stroke + 'em' : '';
-  el.style.webkitTextFillColor = settings.enabled && alpha < 100 ? `color-mix(in srgb, currentColor ${alpha}%, transparent)` : '';
+  el.style.webkitTextFillColor = settings.enabled && !thinPreview && alpha < 100
+    ? `color-mix(in srgb, currentColor ${alpha}%, transparent)` : '';
   if(!item || !settings.enabled) { el.style.fontFamily=''; el.style.fontWeight=''; return; }
   el.style.fontFamily=quoteCss(item.type==='remote'?item.family:`kkfl-${item.id.replace(/[^a-zA-Z0-9_-]/g,'')}`);
   el.style.fontWeight=String(weight);
@@ -343,7 +358,16 @@ function createUI() {
         <label for="kkfl-weight">预览字重 <output id="kkfl-weight-label">400</output></label>
         <input type="range" id="kkfl-weight" min="100" max="900" step="1" value="400" />
         <div class="kkfl-muted">静态字体用描边模拟加粗，较轻的档位会淡化文字。拖动时可在下方预览。</div>
+        <label class="kkfl-check kkfl-thin-experiment"><input id="kkfl-thin-experiment" type="checkbox" /> 实验：笔画收缩（仅预览）</label>
         <div class="kkfl-preview-box">
+          <svg class="kkfl-preview-filter" width="0" height="0" aria-hidden="true" focusable="false">
+            <defs>
+              <filter id="kkfl-preview-thin-filter" x="-10%" y="-20%" width="120%" height="140%" color-interpolation-filters="sRGB">
+                <feMorphology id="kkfl-thin-morphology" in="SourceAlpha" operator="erode" radius="0" result="thinMask"></feMorphology>
+                <feComposite in="SourceGraphic" in2="thinMask" operator="in"></feComposite>
+              </filter>
+            </defs>
+          </svg>
           <div id="kkfl-preview" class="kkfl-preview"></div>
         </div>
         <div class="kkfl-preview-controls">
@@ -471,6 +495,13 @@ function createUI() {
     settings.adjustBody = e.target.checked;
     if (activeFamily) injectCSS(activeFamily);
     save();
+  });
+  const thinExperiment = byId('kkfl-thin-experiment');
+  thinExperiment.checked = Boolean(settings.experimentalThinPreview);
+  thinExperiment.addEventListener('change', e => {
+    settings.experimentalThinPreview = e.target.checked;
+    save();
+    updatePreview(validWeight(byId('kkfl-weight').value));
   });
   byId('kkfl-weight').addEventListener('input',e=>{
     const weight = validWeight(e.target.value);
