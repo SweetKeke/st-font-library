@@ -239,7 +239,16 @@ async function apply() {
 function setActiveLabel() {
   const item = settings.entries.find(x => x.id === settings.activeId);
   const el = byId('kkfl-current');
-  if (el) el.textContent = settings.enabled && item ? `正在使用：${item.name}` : '正在使用：原有字体';
+  if (el) {
+    const name = document.createElement('span');
+    name.className = 'kkfl-current-name';
+    name.textContent = settings.enabled && item ? item.name : '原有字体';
+    // The label stays in the UI font; only the selected font's name previews the loaded face.
+    if (settings.enabled && item && activeFamily) {
+      name.style.fontFamily = quoteCss(activeFamily) + ', sans-serif';
+    }
+    el.replaceChildren(document.createTextNode('正在使用：'), name);
+  }
   const b = byId('kkfl-toggle');
   if (b) b.checked = Boolean(settings.enabled);
 }
