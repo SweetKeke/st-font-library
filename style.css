@@ -3,7 +3,20 @@
 #kk-font-library-panel label { font-size: 0.93em; }
 #kk-font-library-panel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 #kk-font-library-panel select, #kk-font-library-panel textarea { width: 100%; min-width: 0; box-sizing: border-box; }
-#kk-font-library-panel .kkfl-update-row {display:flex; justify-content:flex-end; align-items:center;}
+#kk-font-library-panel .kkfl-update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px 0 6px;
+  border-bottom: 1px solid var(--SmartThemeBorderColor, #aaa);
+}
+#kk-font-library-panel .kkfl-update-label {
+  font-size: .88em;
+  font-weight: 600;
+  opacity: .78;
+}
 #kk-font-library-panel .kkfl-top {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
 #kk-font-library-panel #kkfl-update-extension {
   display: inline-flex;
