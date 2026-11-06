@@ -4,6 +4,7 @@
 #kk-font-library-panel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 #kk-font-library-panel select, #kk-font-library-panel textarea { width: 100%; min-width: 0; box-sizing: border-box; }
 #kk-font-library-panel .kkfl-top {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+#kk-font-library-panel #kkfl-current { font-size: 1.15em; font-weight: 600; }
 #kk-font-library-panel .kkfl-title {font-weight:700; border-bottom:1px solid var(--SmartThemeBorderColor, #aaa); padding:5px 0; margin-top:7px;}
 #kk-font-library-panel .kkfl-muted {opacity:.7; font-size:.84em; line-height:1.5;}
 #kk-font-library-panel .kkfl-preview-box {border:1px solid var(--SmartThemeBorderColor, #aaa); border-radius:8px; padding:10px 14px; display:flow-root;}
