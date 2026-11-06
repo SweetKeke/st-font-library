@@ -1,0 +1,48 @@
+#kk-font-library-panel { margin: 0.5em 0; }
+#kk-font-library-panel .kkfl-content { display: flex; flex-direction: column; gap: 9px; padding: 12px 4px; }
+#kk-font-library-panel label { font-size: 0.93em; }
+#kk-font-library-panel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+#kk-font-library-panel select, #kk-font-library-panel textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+#kk-font-library-panel .kkfl-top {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+#kk-font-library-panel .kkfl-title {font-weight:700; border-bottom:1px solid var(--SmartThemeBorderColor, #aaa); padding:5px 0; margin-top:7px;}
+#kk-font-library-panel .kkfl-muted {opacity:.7; font-size:.84em; line-height:1.5;}
+#kk-font-library-panel .kkfl-preview-box {border:1px solid var(--SmartThemeBorderColor, #aaa); border-radius:8px; padding:10px 14px; display:flow-root;}
+#kk-font-library-panel #kkfl-preview-language {float:right; width:auto; max-width:100%; margin:0 0 3px 8px; font-size:.9em;}
+#kk-font-library-panel .kkfl-preview {line-height:1.8; overflow-wrap:anywhere; font-size:1.1em;}
+#kk-font-library-panel #kkfl-list {
+  --kkfl-row-height: 32px;
+  max-height: calc(4 * var(--kkfl-row-height));
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+#kk-font-library-panel .kkfl-entry {
+  display:flex; align-items:center; gap:6px; box-sizing:border-box;
+  height:var(--kkfl-row-height); padding:3px 0;
+  border-bottom:1px solid var(--SmartThemeBorderColor, #aaa);
+}
+#kk-font-library-panel .kkfl-entry-info {flex:1; min-width:0;}
+#kk-font-library-panel .kkfl-entry-info strong, #kk-font-library-panel .kkfl-entry-info small {
+  display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+}
+#kk-font-library-panel .kkfl-entry-info strong {font-size:10px; font-weight:700; line-height:13px;}
+#kk-font-library-panel .kkfl-entry-info small {opacity:.7; font-size:8.5px; line-height:11px;}
+#kk-font-library-panel .kkfl-entry button {
+  flex-shrink:0; margin:0; padding:2px 5px; white-space:nowrap; font-size:10px; line-height:1.25;
+}
+#kk-font-library-panel .kkfl-form {display:flex; flex-direction:column; gap:7px; margin:6px 0;}
+#kk-font-library-panel .kkfl-check {display:flex;gap:7px;align-items:center;}
+#kk-font-library-panel #kkfl-status {min-height:1em; font-size:.9em;}
+#kk-font-library-panel #kkfl-status.error {color:#e46b6b;}
+#kk-font-library-panel button {cursor:pointer;}
+
+#kk-font-library-panel label:has(> :is(#kkfl-toggle, #kkfl-adjust-body)) {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.4em;
+}
+#kk-font-library-panel :is(#kkfl-toggle, #kkfl-adjust-body) {
+  flex: none;
+  margin: 0;
+}
