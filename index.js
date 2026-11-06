@@ -155,7 +155,9 @@ function weightStyle(item, value) {
   if (!usesSimulatedWeight(item)) return {weight:target, stroke:0, alpha:100};
   const base = validWeight(item.type === 'remote' ? onlineBase : (item.fileWeight || 400));
   const delta = (target - base) / 100;
-  return {weight:base, stroke:Math.max(0, delta) * 0.012, alpha:100 + Math.min(0, delta) * 6};
+  // Soft saturation for CJK text: gradual bolding without excessive stroke buildup.
+  const stroke = delta > 0 ? 0.032 * (1 - Math.exp(-delta / 2.5)) : 0;
+  return {weight:base, stroke, alpha:100 + Math.min(0, delta) * 6};
 }
 function detectOnlineSingleWeight(family) {
   const weights = [];
