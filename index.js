@@ -1,5 +1,7 @@
-/* SillyTavern Font Library — v1.3.3 */
+/* SillyTavern Font Library — v1.4.0 */
 const EXT_KEY = 'kk_font_library_v1';
+// Keep in sync with manifest.json.
+const VERSION = '1.4.0';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -10,34 +12,10 @@ const PREVIEW_SAMPLES = {
   en: '“Still awake?” The quick brown fox jumps over the lazy dog!',
   ko: '창가에 달빛이 비쳤다. “그 편지, 아직 기억해?”',
 };
-const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, adjustBody: false, scope: 'chat', pageSize: 10, previewBoldMode: 'stroke' };
+const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, weightScope: 'off', scope: 'chat', pageSize: 10, previewBoldMode: 'stroke' };
 let settings, save;
 let currentPage = 1;
 let storageKey;
-let shared = false;
-let sharedAvailable = false;
-const api = '/api/plugins/st-font-library';
-async function serverRequest(path, options) {
-  const response = await fetch(api + path, {cache:'no-store', ...options});
-  if (!response.ok) throw new Error('酒馆字体库请求失败（' + response.status + '），请刷新重试。');
-  return response;
-}
-async function changeEntry(path, body) {
-  return serverRequest(path, {method:'POST', headers:window.SillyTavern.getContext().getRequestHeaders(), body:JSON.stringify(body)});
-}
-async function uploadEntry(entry, file) {
-  const meta = new TextEncoder().encode(JSON.stringify(entry));
-  const size = new DataView(new ArrayBuffer(4));
-  size.setUint32(0,meta.length);
-  const headers = {...window.SillyTavern.getContext().getRequestHeaders(), 'Content-Type':'application/octet-stream'};
-  const body = new Blob([size, meta, ...(file ? [file] : [])]);
-  return (await serverRequest('/add', {method:'POST',headers,body})).json();
-}
-async function readShared(){
-  const entries = await (await serverRequest('/list')).json();
-  if (!Array.isArray(entries)) throw new Error('酒馆字体库未启动。');
-  return {...DEFAULTS,...JSON.parse(localStorage.getItem(storageKey+':prefs') || '{}'),entries};
-}
 let activeFace;
 let activeFamily;
 let onlineBase;
@@ -47,6 +25,44 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'
 const uuid = () => (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 const quoteCss = (s) => `"${String(s).replace(/[\\"\n\r\f]/g, '')}"`;
 const info = (m, error = false) => { const el = byId('kkfl-status'); if (el) { el.textContent=m; el.classList.toggle('error', error); } if (error) console.error('[Font Library]', m); };
+const EXTENSION_ID = 'third-party/st-font-library';
+const EXTENSION_NAME = 'st-font-library';
+const UPDATE_CACHE_KEY = 'kkfl-update-check';
+async function extensionTarget() {
+  const { extensionTypes } = await import('/scripts/extensions.js');
+  const type = extensionTypes[EXTENSION_ID];
+  if (!['local', 'global'].includes(type)) throw new Error('未能识别字体库的安装位置，请通过「管理扩展程序」更新。');
+  return { extensionName: EXTENSION_NAME, global: type === 'global' };
+}
+async function extensionRequest(path, payload) {
+  const response = await fetch('/api/extensions/' + path, {
+    method: 'POST',
+    headers: window.SillyTavern.getContext().getRequestHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('更新请求失败（HTTP ' + response.status + '）。请检查酒馆终端日志。');
+  return response.json();
+}
+function setUpdateBadge(visible) {
+  const badge = byId('kkfl-update-badge');
+  if (badge) badge.hidden = !visible;
+}
+// Quiet check on load: the hint sits next to the update button, never a popup.
+async function checkForUpdates() {
+  try {
+    const cached = sessionStorage.getItem(UPDATE_CACHE_KEY);
+    if (cached) {
+      const { at, stale } = JSON.parse(cached);
+      if (Date.now() - at < 10 * 60 * 1000) { setUpdateBadge(Boolean(stale)); return; }
+    }
+    const version = await extensionRequest('version', await extensionTarget());
+    const stale = Boolean(version.currentCommitHash) && !version.isUpToDate;
+    sessionStorage.setItem(UPDATE_CACHE_KEY, JSON.stringify({ at: Date.now(), stale }));
+    setUpdateBadge(stale);
+  } catch (error) {
+    console.debug('[Font Library] 检查更新失败：', error.message);
+  }
+}
 
 function getDb() {
   return new Promise((resolve, reject) => {
@@ -192,7 +208,8 @@ function injectCSS(family) {
   const selectors = cssSelectors(settings.scope);
   const item = settings.entries.find(entry => entry.id === settings.activeId);
   const {weight, stroke, alpha} = weightStyle(item, settings.weight);
-  const declaration = `font-family: ${quoteCss(family)}, sans-serif !important;`;
+  const familyList = `${quoteCss(family)}, sans-serif`;
+  const declaration = `font-family: ${familyList} !important;`;
   // Icon fonts also live on buttons, divs and spans, not just <i> elements.
   // Let their own styles select the font, including inherited icon children.
   const iconSelector = [
@@ -205,7 +222,19 @@ function injectCSS(family) {
   ].join(', ');
   const excluded = `:not(#${PANEL_ID}, #${PANEL_ID} *, :is(${iconSelector}), :is(${iconSelector}) *)`;
   let rules = selectors.map(s => `${s}${excluded} { ${declaration} }`).join('\n');
-  if (settings.adjustBody) {
+  // Widgets such as the prompt list (<ul id="completion_prompt_manager_list"
+  // class="text_pole">) read their font from --mainFontFamily instead of
+  // inheriting it, so overriding body alone leaves whole panels on the theme font.
+  if (settings.scope === 'global') {
+    rules += `\n:root, body { --mainFontFamily: ${familyList} !important; }`;
+  }
+  if (settings.weightScope === 'global') {
+    // Same treatment as the chat body, but on every element the font covers.
+    const weightRules = [`font-weight: ${weight} !important;`];
+    if (stroke) weightRules.push(`-webkit-text-stroke-width: ${stroke}em;`);
+    if (alpha < 100) weightRules.push(`-webkit-text-fill-color: color-mix(in srgb, currentColor ${alpha}%, transparent);`);
+    rules += '\n' + cssSelectors('global').map(s => `${s}${excluded} { ${weightRules.join(' ')} }`).join('\n');
+  } else if (settings.weightScope === 'chat') {
     let bodyStyle = `font-weight: ${weight};`;
     if (stroke) bodyStyle += ` -webkit-text-stroke-width: ${stroke}em;`;
     if (alpha < 100) bodyStyle += ` -webkit-text-fill-color: color-mix(in srgb, currentColor ${alpha}%, transparent);`;
@@ -246,7 +275,7 @@ async function apply() {
     };
     document.head.append(link);
   } else {
-    const file = shared ? await (await serverRequest('/font/'+encodeURIComponent(item.id))).blob() : await dbAct('readonly', item.id);
+    const file = await dbAct('readonly', item.id);
     if (token !== currentToken) return;
     if (!file) { info(`找不到本地字体「${item.name}」。可能是在另一台设备或浏览器添加的，请重新上传。`, true); setActiveLabel(); return; }
     const url = URL.createObjectURL(file);
@@ -312,13 +341,11 @@ function renderList() {
       if (v===null) return;
       if (!v.trim()) return info('名称不能为空。', true);
       const name=v.trim().slice(0,100);
-      if (shared) {try {await changeEntry('/rename/'+entry.id,{name});}catch(e){return info(e.message,true);}}
       update(() => { entry.name=name; }); setActiveLabel();
     });
     const del = document.createElement('button'); del.type='button'; del.textContent='删除'; del.addEventListener('click', async () => {
       if (!confirm(`删除字体「${entry.name}」？`)) return;
-      if (shared) {try {await changeEntry('/remove/'+entry.id,{});}catch(e){return info(e.message,true);}}
-      else if (entry.type==='local') { try { await dbAct('readwrite', entry.id); } catch (e) { info('删除本地文件失败：'+e.message, true); return; } }
+      if (entry.type==='local') { try { await dbAct('readwrite', entry.id); } catch (e) { info('删除本地文件失败：'+e.message, true); return; } }
       const wasActive = settings.activeId === entry.id;
       update(() => { settings.entries=settings.entries.filter(x=>x.id!==entry.id); if(settings.activeId===entry.id) settings.activeId=''; });
       if (wasActive) apply().catch(e=>info(e.message,true));
@@ -336,9 +363,8 @@ function renderList() {
   if (prev) prev.disabled = currentPage <= 1;
   if (next) next.disabled = currentPage >= totalPages;
   const current = byId('kkfl-current'); if (current) setActiveLabel();
-  byId('kkfl-migrate').hidden = !sharedAvailable || !JSON.parse(localStorage.getItem(storageKey) || '{}').entries?.length;
   const w = byId('kkfl-weight'); if (w) w.value=String(settings.weight);
-  byId('kkfl-adjust-body').checked = Boolean(settings.adjustBody);
+  const weightScope = byId('kkfl-weight-scope'); if (weightScope) weightScope.value = settings.weightScope;
   const out = byId('kkfl-weight-label'); if(out) out.textContent=String(settings.weight);
   const scope = byId('kkfl-scope'); if (scope) scope.value=settings.scope;
   updatePreview();
@@ -367,6 +393,120 @@ function updatePreview(value = settings.weight) {
   el.style.fontWeight = String(nativeBold ? validWeight(value) : weight);
 }
 
+const EXPORT_APP = 'st-font-library';
+const EXPORT_SCHEMA = 1;
+
+function readBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error || new Error('读取字体文件失败'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function exportCollection() {
+  const entries = [];
+  const missing = [];
+  for (const entry of settings.entries) {
+    if (entry.type !== 'local') { entries.push(entry); continue; }
+    const file = await dbAct('readonly', entry.id);
+    if (!file) { missing.push(entry.name); continue; }
+    entries.push({...entry, data: await readBlobAsDataUrl(file)});
+  }
+  const payload = {
+    app: EXPORT_APP,
+    schema: EXPORT_SCHEMA,
+    exportedAt: new Date().toISOString(),
+    entries,
+    prefs: {
+      activeId: settings.activeId,
+      enabled: settings.enabled,
+      weight: settings.weight,
+      weightScope: settings.weightScope,
+      scope: settings.scope,
+      pageSize: settings.pageSize,
+      previewBoldMode: settings.previewBoldMode,
+    },
+  };
+  const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `st-font-library-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  info(`已导出 ${entries.length} 个收藏${missing.length ? '，跳过缺少文件的：' + missing.join('、') : ''}。`, missing.length > 0);
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [meta, base64] = String(dataUrl).split(',');
+  const binary = atob(base64 || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], {type: /data:([^;]+)/.exec(meta || '')?.[1] || 'application/octet-stream'});
+}
+
+function entrySignature(entry) {
+  return entry.type === 'remote' ? `remote|${entry.family}|${entry.url}` : `local|${entry.filename}|${entry.name}`;
+}
+
+async function importCollection(file) {
+  let payload;
+  try {
+    payload = JSON.parse(await file.text());
+  } catch {
+    throw new Error('不是有效的 JSON 文件。');
+  }
+  if (!payload || payload.app !== EXPORT_APP || !Array.isArray(payload.entries)) {
+    throw new Error('这不是字体收藏夹导出的备份文件。');
+  }
+  const known = new Set(settings.entries.map(entry => entry.id));
+  const signatures = new Set(settings.entries.map(entrySignature));
+  let added = 0;
+  for (const raw of payload.entries) {
+    if (!raw || typeof raw !== 'object') continue;
+    const type = raw.type === 'remote' ? 'remote' : raw.type === 'local' ? 'local' : '';
+    if (!type || typeof raw.name !== 'string' || !raw.name.trim()) continue;
+    if (type === 'remote' && (!raw.url || !raw.family)) continue;
+    if (type === 'local' && !raw.data) continue;
+    const entry = {
+      id: typeof raw.id === 'string' && raw.id ? raw.id : uuid(),
+      type,
+      name: raw.name.trim().slice(0, 100),
+      ...(type === 'remote'
+        ? {url: raw.url, family: raw.family}
+        : {filename: String(raw.filename || 'font'), variable: Boolean(raw.variable), fileWeight: validWeight(raw.fileWeight || 400)}),
+    };
+    if (known.has(entry.id) || signatures.has(entrySignature(entry))) continue;
+    if (type === 'local') {
+      try { await dbAct('readwrite', entry.id, dataUrlToBlob(raw.data)); }
+      catch { continue; }
+    }
+    settings.entries.push(entry);
+    known.add(entry.id);
+    signatures.add(entrySignature(entry));
+    added++;
+  }
+  const prefs = payload.prefs && typeof payload.prefs === 'object' ? payload.prefs : {};
+  if (typeof prefs.enabled === 'boolean') settings.enabled = prefs.enabled;
+  if (prefs.weight !== undefined) settings.weight = validWeight(prefs.weight);
+  if (['off', 'chat', 'global'].includes(prefs.weightScope)) settings.weightScope = prefs.weightScope;
+  if (['chat', 'global'].includes(prefs.scope)) settings.scope = prefs.scope;
+  if (prefs.pageSize !== undefined) settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(prefs.pageSize) || 10)));
+  if (['stroke', 'native'].includes(prefs.previewBoldMode)) settings.previewBoldMode = prefs.previewBoldMode;
+  if (typeof prefs.activeId === 'string' && settings.entries.some(entry => entry.id === prefs.activeId)) {
+    settings.activeId = prefs.activeId;
+  }
+  if (!settings.activeId && settings.entries.length) settings.activeId = settings.entries[0].id;
+  save();
+  renderList();
+  await apply();
+  info(added ? `已导入 ${added} 个收藏。` : '没有新的收藏可导入（可能已经存在）。');
+}
+
 function makeEl(tag, id, text, attrs={}) {
   const e=document.createElement(tag); if(id)e.id=id;if(text!==undefined&&text!==null)e.textContent=text;
   Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v)); return e;
@@ -380,12 +520,12 @@ function createUI() {
     <div class="inline-drawer">
       <div class="inline-drawer-toggle inline-drawer-header"><b>字体收藏夹 · Font Library</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>
       <div class="inline-drawer-content kkfl-content">
-        <button id="kkfl-migrate" type="button" hidden>导入此浏览器已有收藏</button>
-        <div class="kkfl-update-row"><span class="kkfl-update-label">字体库管理</span><button id="kkfl-update-extension" type="button" class="menu_button" title="检查并更新字体库插件"><i class="fa-solid fa-rotate" aria-hidden="true"></i> 更新插件</button></div>
+        <div class="kkfl-update-row"><span class="kkfl-update-label">字体库管理<small id="kkfl-version" class="kkfl-version" title="当前安装的字体库版本"></small></span><span class="kkfl-update-side"><span id="kkfl-update-badge" class="kkfl-update-badge" hidden>有新版本</span><button id="kkfl-update-extension" type="button" class="menu_button" title="检查并更新字体库插件"><i class="fa-solid fa-rotate" aria-hidden="true"></i> 更新插件</button></span></div>
+        <div class="kkfl-io-row"><button id="kkfl-export" type="button" class="menu_button">导出收藏</button><button id="kkfl-import" type="button" class="menu_button">导入收藏</button><input id="kkfl-import-file" type="file" accept=".json,application/json" hidden /></div>
         <div class="kkfl-top"><span id="kkfl-current"></span></div>
         <label><input id="kkfl-toggle" type="checkbox" /> 启用字体覆盖</label>
         <label for="kkfl-scope">字体应用范围</label><select id="kkfl-scope"><option value="chat">仅聊天正文与角色名</option><option value="global">主要酒馆界面和聊天内容</option></select>
-        <label><input id="kkfl-adjust-body" type="checkbox" /> 将预览字重用于聊天正文</label>
+        <label for="kkfl-weight-scope">字重应用范围</label><select id="kkfl-weight-scope"><option value="off">仅预览</option><option value="chat">聊天正文</option><option value="global">整个界面（全局）</option></select>
         <label for="kkfl-weight">预览字重 <output id="kkfl-weight-label">400</output></label>
         <input type="range" id="kkfl-weight" min="100" max="900" step="1" value="400" />
         <div class="kkfl-muted">静态字体用描边模拟加粗，较轻的档位会淡化文字。拖动时可在下方预览。</div>
@@ -446,74 +586,47 @@ function createUI() {
   }
   language.addEventListener('change', showSample);
   showSample();
+  byId('kkfl-export').addEventListener('click', () => { exportCollection().catch(error => info('导出失败：' + error.message, true)); });
+  byId('kkfl-import').addEventListener('click', () => byId('kkfl-import-file').click());
+  byId('kkfl-import-file').addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try { await importCollection(file); } catch (error) { info('导入失败：' + error.message, true); }
+  });
   byId('kkfl-update-extension').addEventListener('click', async () => {
     const button = byId('kkfl-update-extension');
     const original = button.innerHTML;
     button.disabled = true;
     button.textContent = '检查更新中…';
     try {
-      const { extensionTypes } = await import('/scripts/extensions.js');
-      const extensionId = 'third-party/st-font-library';
-      const extensionType = extensionTypes[extensionId];
-      if (!['local', 'global'].includes(extensionType)) {
-        throw new Error('未能识别字体库的安装位置，请通过「管理扩展程序」更新。');
-      }
-      const payload = { extensionName: 'st-font-library', global: extensionType === 'global' };
-      const request = async path => {
-        const response = await fetch('/api/extensions/' + path, {
-          method: 'POST',
-          headers: window.SillyTavern.getContext().getRequestHeaders(),
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) throw new Error('更新请求失败（HTTP ' + response.status + '）。请检查酒馆终端日志。');
-        return response.json();
-      };
-      const version = await request('version');
+      const target = await extensionTarget();
+      const version = await extensionRequest('version', target);
       if (!version.currentCommitHash) throw new Error('此插件不是通过 Git 安装，无法直接更新。');
       if (version.isUpToDate) {
+        setUpdateBadge(false);
+        sessionStorage.setItem(UPDATE_CACHE_KEY, JSON.stringify({ at: Date.now(), stale: false }));
         info('字体库已经是最新版本。');
         return;
       }
       button.textContent = '正在更新…';
-      const result = await request('update');
+      const result = await extensionRequest('update', target);
       if (result.isUpToDate) {
+        setUpdateBadge(false);
         info('字体库已经是最新版本。');
         return;
       }
-      info('字体库已更新至 ' + result.shortCommitHash + '。刷新页面后生效。');
-      if (confirm('字体库更新成功。现在刷新页面以启用新版吗？')) {
-        location.reload();
-      }
+      sessionStorage.removeItem(UPDATE_CACHE_KEY);
+      setUpdateBadge(false);
+      info('字体库已更新至 ' + result.shortCommitHash + '，正在刷新…');
+      button.textContent = '已更新，正在刷新…';
+      setTimeout(() => location.reload(), 700);
+      return;
     } catch (error) {
       info('字体库更新失败：' + error.message, true);
-    } finally {
-      button.innerHTML = original;
-      button.disabled = false;
     }
-  });
-  byId('kkfl-migrate').addEventListener('click',async()=>{
-    root.inert=true;
-    try {
-      const old=JSON.parse(localStorage.getItem(storageKey) || '{}');
-      const next = await readShared();
-      const missing=[];
-      for (const entry of old.entries || []) {
-        if(next.entries.some(x=>x.id===entry.id))continue;
-        const file = entry.type==='local' ? await dbAct('readonly',entry.id) : null;
-        if(entry.type==='local' && !file){missing.push(entry.name);continue;}
-        next.entries.push(await uploadEntry(entry,file));
-      }
-      // Switch only after every local entry is safely available on the server.
-      if (!missing.length) {
-        const {entries, ...preferences} = settings;
-        settings = {...next, ...preferences};
-        shared = true;
-        localStorage.setItem(storageKey + ':shared', 'true');
-        save();
-        await apply();
-      }
-      info(missing.length ? '其余已导入。本浏览器缺少文件：'+missing.join('、') : '已有收藏已合并到酒馆字体库。');
-    } catch(e){info(e.message,true);}finally{renderList();root.inert=false;}
+    button.innerHTML = original;
+    button.disabled = false;
   });
   byId('kkfl-page-size').addEventListener('change', e => {
     const n = Math.round(Number(e.target.value));
@@ -526,8 +639,8 @@ function createUI() {
   byId('kkfl-page-prev').addEventListener('click', () => { currentPage--; renderList(); });
   byId('kkfl-page-next').addEventListener('click', () => { currentPage++; renderList(); });
   byId('kkfl-toggle').addEventListener('change',e=>{settings.enabled=e.target.checked;save();apply().catch(e=>info(e.message,true));renderList();});
-  byId('kkfl-adjust-body').addEventListener('change', e => {
-    settings.adjustBody = e.target.checked;
+  byId('kkfl-weight-scope').addEventListener('change', e => {
+    settings.weightScope = ['off', 'chat', 'global'].includes(e.target.value) ? e.target.value : 'off';
     if (activeFamily) injectCSS(activeFamily);
     save();
   });
@@ -546,7 +659,7 @@ function createUI() {
   });
   byId('kkfl-weight').addEventListener('change',e=>{
     settings.weight = validWeight(e.target.value);
-    if (activeFamily && settings.adjustBody) injectCSS(activeFamily);
+    if (activeFamily && settings.weightScope !== 'off') injectCSS(activeFamily);
     save();
   });
   byId('kkfl-scope').addEventListener('change',e=>{
@@ -561,7 +674,6 @@ function createUI() {
       const family=validFamily(byId('kkfl-remote-family').value.trim() || await onlineFamily(url));
       const name=byId('kkfl-remote-name').value.trim() || family;
       const item={id:uuid(),name:name.slice(0,100),family,url,type:'remote'};
-      if(shared)await uploadEntry(item);
       settings.entries.push(item); settings.activeId=item.id; settings.enabled=true;save();renderList();
       apply().then(()=>info('已添加在线字体。如果显示未变化，请确认 CSS 的真实 font-family 名称。')).catch(e=>info(e.message,true));
       byId('kkfl-remote-name').value='';byId('kkfl-remote-family').value='';byId('kkfl-remote-url').value='';
@@ -583,57 +695,46 @@ function createUI() {
       const name=byId('kkfl-local-name').value.trim() || await localName(file);
       const id=uuid();
       const item={id,type:'local',name:name.slice(0,100),filename:file.name,variable:byId('kkfl-local-variable').checked,fileWeight:validWeight(byId('kkfl-file-weight').value)};
-      if(shared)await uploadEntry(item,file);
-      else await dbAct('readwrite',id,file);
+      await dbAct('readwrite',id,file);
       settings.entries.push(item);
       settings.activeId=id;settings.enabled=true;save();renderList();await apply();
       info(`已添加本地字体「${name}」。`);byId('kkfl-local-name').value='';byId('kkfl-local-file').value='';byId('kkfl-local-filename').textContent='未选择文件';
     }catch(e){info(e.message,true);}finally{button.disabled=!byId('kkfl-local-file').files?.length;root.inert=false;}
   });
   renderList();
+  byId('kkfl-version').textContent = 'v' + VERSION;
+  setTimeout(checkForUpdates, 2000);
   return true;
 }
 async function boot() {
   if(!window.SillyTavern?.getContext) { console.warn('[Font Library] SillyTavern context unavailable'); return; }
-  const ctx=window.SillyTavern.getContext();
   const {getCurrentUserHandle} = await import('/scripts/user.js');
   storageKey = EXT_KEY + ':' + getCurrentUserHandle();
-  const legacy = ctx.extensionSettings[EXT_KEY];
   const saved = localStorage.getItem(storageKey);
-  settings = saved ? JSON.parse(saved) : structuredClone(legacy ?? DEFAULTS);
+  settings = saved ? JSON.parse(saved) : structuredClone(DEFAULTS);
+  // v1.4.0 dropped the optional server plugin; keep the shared-mode preferences.
+  const sharedPrefs = localStorage.getItem(storageKey + ':prefs');
+  if (sharedPrefs) {
+    try {
+      const { entries, ...prefs } = JSON.parse(sharedPrefs);
+      Object.assign(settings, prefs);
+    } catch { /* Corrupt preferences are ignored. */ }
+    localStorage.removeItem(storageKey + ':prefs');
+  }
+  localStorage.removeItem(storageKey + ':shared');
+  // v1.3.5 replaced the adjustBody checkbox with a three-way weight scope.
+  if ('adjustBody' in settings) {
+    if (!settings.weightScope) settings.weightScope = settings.adjustBody ? 'chat' : 'off';
+    delete settings.adjustBody;
+  }
   for (const [k,v] of Object.entries(DEFAULTS)) if (!(k in settings)) settings[k]=structuredClone(v);
   if(!Array.isArray(settings.entries))settings.entries=[];
   if(!['chat','global'].includes(settings.scope))settings.scope='chat';
+  if(!['off','chat','global'].includes(settings.weightScope)) settings.weightScope='off';
   if(!['stroke','native'].includes(settings.previewBoldMode))settings.previewBoldMode='stroke';
   settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
-  save = () => {
-    if(shared){
-      const {entries,...prefs}=settings;
-      localStorage.setItem(storageKey+':prefs', JSON.stringify(prefs));
-    }else localStorage.setItem(storageKey, JSON.stringify(settings));
-  };
-  if (legacy) {
-    save();
-    // A different browser may own the only copy of an old local font.
-    // Leave its migration record intact until opened in the owning browser.
-    const localEntries = (legacy.entries || []).filter(entry => entry.type === 'local');
-    const hasFiles = await Promise.all(localEntries.map(entry => dbAct('readonly', entry.id, undefined, true).then(Boolean)));
-    if (hasFiles.every(Boolean)) {
-      delete ctx.extensionSettings[EXT_KEY];
-      ctx.saveSettingsDebounced();
-    }
-  }
-  try {
-    const serverSettings = await readShared();
-    sharedAvailable = true;
-    const useServer = localStorage.getItem(storageKey + ':shared') === 'true';
-    if (useServer || !settings.entries.length) {
-      settings = serverSettings;
-      settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
-      if(!['stroke','native'].includes(settings.previewBoldMode))settings.previewBoldMode='stroke';
-      shared = true;
-    }
-  }catch(e){console.warn('[Font Library]',e.message);}
+  save = () => localStorage.setItem(storageKey, JSON.stringify(settings));
+  if (sharedPrefs) save();
   await apply().catch(e=>console.error('[Font Library]', e));
   if(createUI())return;
   const observer=new MutationObserver(()=>{if(createUI()) observer.disconnect();});

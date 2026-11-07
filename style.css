@@ -23,7 +23,53 @@
   font-weight: 600;
   opacity: .78;
 }
+#kk-font-library-panel .kkfl-version {
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: .78em;
+  font-weight: 500;
+  line-height: 1.5;
+  opacity: .55;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+#kk-font-library-panel .kkfl-update-side { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+#kk-font-library-panel .kkfl-update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  font-size: .76em;
+  line-height: 1.7;
+  white-space: nowrap;
+  color: #c47a4f;
+  border: 1px solid color-mix(in srgb, #d98a5c 38%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #d98a5c 12%, transparent);
+  animation: kkflBadgeIn .25s ease-out both;
+}
+#kk-font-library-panel .kkfl-update-badge[hidden] { display: none; }
+#kk-font-library-panel .kkfl-update-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+  animation: kkflPulse 1.8s ease-in-out infinite;
+}
+@keyframes kkflBadgeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@keyframes kkflPulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) {
+  #kk-font-library-panel .kkfl-update-badge,
+  #kk-font-library-panel .kkfl-update-badge::before { animation: none; }
+}
 #kk-font-library-panel .kkfl-top {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+#kk-font-library-panel .kkfl-io-row { display: flex; gap: 8px; }
+#kk-font-library-panel .kkfl-io-row button { flex: 1 1 0; min-width: 0; }
 #kk-font-library-panel #kkfl-update-extension {
   display: inline-flex;
   width: auto;
@@ -194,14 +240,14 @@
 #kk-font-library-panel #kkfl-status.error {color:#e46b6b;}
 #kk-font-library-panel button {cursor:pointer;}
 
-#kk-font-library-panel label:has(> :is(#kkfl-toggle, #kkfl-adjust-body)) {
+#kk-font-library-panel label:has(> #kkfl-toggle) {
   display: flex;
   flex-flow: row nowrap;
   align-items: center;
   justify-content: flex-start;
   gap: 0.4em;
 }
-#kk-font-library-panel :is(#kkfl-toggle, #kkfl-adjust-body) {
+#kk-font-library-panel #kkfl-toggle {
   flex: none;
   margin: 0;
 }
