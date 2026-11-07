@@ -1,7 +1,7 @@
-/* SillyTavern Font Library — v1.5.0 */
+/* SillyTavern Font Library — v1.5.1 */
 const EXT_KEY = 'kk_font_library_v1';
 // Keep in sync with manifest.json.
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -23,7 +23,6 @@ let onlineWeights = [];
 let onlineVariable = false;
 let currentToken = 0;
 const byId = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const uuid = () => (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 const quoteCss = (s) => `"${String(s).replace(/[\\"\n\r\f]/g, '')}"`;
 const info = (m, error = false) => { const el = byId('kkfl-status'); if (el) { el.textContent=m; el.classList.toggle('error', error); } if (error) console.error('[Font Library]', m); };
@@ -66,29 +65,43 @@ async function checkForUpdates() {
   }
 }
 
+let dbPromise;
 function getDb() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE); };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  // Keep one connection: opening IndexedDB per operation made bulk import slow.
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE); };
+      req.onsuccess = () => {
+        const db = req.result;
+        // Another tab upgraded the schema: drop the handle so the next call reopens.
+        db.onversionchange = () => { db.close(); dbPromise = undefined; };
+        resolve(db);
+      };
+      req.onerror = () => reject(req.error);
+    }).catch(error => { dbPromise = undefined; throw error; });
+  }
+  return dbPromise;
 }
-async function dbAct(mode, key, value, checkOnly = false) {
+async function dbAct(mode, key, value) {
   const db = await getDb();
-  try {
-    return await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
+    let req;
+    try {
       const tx = db.transaction(STORE, mode);
       const store = tx.objectStore(STORE);
-      let req;
-      if (mode === 'readonly') req = checkOnly ? store.getKey(key) : store.get(key);
+      if (mode === 'readonly') req = store.get(key);
       else if (Array.isArray(key)) key.forEach(id => store.delete(id));
       else if (value === undefined) store.delete(key);
       else store.put(value, key);
       tx.oncomplete = () => resolve(req?.result);
       tx.onabort = () => reject(tx.error || new Error('字体数据库操作已取消'));
-    });
-  } finally { db.close(); }
+    } catch (error) {
+      // A cached connection can be closed by the browser; reopen on the next call.
+      dbPromise = undefined;
+      reject(error);
+    }
+  });
 }
 const validWeight = (v) => {
   const weight = Number(v);
@@ -760,10 +773,15 @@ function createUI() {
     save();
     updatePreview(validWeight(byId('kkfl-weight').value));
   });
-  byId('kkfl-weight').addEventListener('input',e=>{
-    const weight = validWeight(e.target.value);
-    byId('kkfl-weight-label').textContent = weight;
-    updatePreview(weight);
+  let previewFrame = 0;
+  byId('kkfl-weight').addEventListener('input', e => {
+    byId('kkfl-weight-label').textContent = validWeight(e.target.value);
+    // Coalesce pointer-rate events into a single paint per frame.
+    if (previewFrame) return;
+    previewFrame = requestAnimationFrame(() => {
+      previewFrame = 0;
+      updatePreview(validWeight(byId('kkfl-weight').value));
+    });
   });
   byId('kkfl-weight').addEventListener('change',e=>{
     settings.weight = validWeight(e.target.value);
