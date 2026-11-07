@@ -1,4 +1,4 @@
-/* SillyTavern Font Library — v1.3.1 */
+/* SillyTavern Font Library — v1.3.2 */
 const EXT_KEY = 'kk_font_library_v1';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
@@ -15,6 +15,7 @@ let settings, save;
 let currentPage = 1;
 let storageKey;
 let shared = false;
+let sharedAvailable = false;
 const api = '/api/plugins/st-font-library';
 async function serverRequest(path, options) {
   const response = await fetch(api + path, {cache:'no-store', ...options});
@@ -334,7 +335,7 @@ function renderList() {
   if (prev) prev.disabled = currentPage <= 1;
   if (next) next.disabled = currentPage >= totalPages;
   const current = byId('kkfl-current'); if (current) setActiveLabel();
-  byId('kkfl-migrate').hidden = !shared || !JSON.parse(localStorage.getItem(storageKey) || '{}').entries?.length;
+  byId('kkfl-migrate').hidden = !sharedAvailable || !JSON.parse(localStorage.getItem(storageKey) || '{}').entries?.length;
   const w = byId('kkfl-weight'); if (w) w.value=String(settings.weight);
   byId('kkfl-adjust-body').checked = Boolean(settings.adjustBody);
   const out = byId('kkfl-weight-label'); if(out) out.textContent=String(settings.weight);
@@ -493,15 +494,22 @@ function createUI() {
     root.inert=true;
     try {
       const old=JSON.parse(localStorage.getItem(storageKey) || '{}');
+      const next = await readShared();
       const missing=[];
       for (const entry of old.entries || []) {
-        if(settings.entries.some(x=>x.id===entry.id))continue;
+        if(next.entries.some(x=>x.id===entry.id))continue;
         const file = entry.type==='local' ? await dbAct('readonly',entry.id) : null;
         if(entry.type==='local' && !file){missing.push(entry.name);continue;}
-        settings.entries.push(await uploadEntry(entry,file));
+        next.entries.push(await uploadEntry(entry,file));
       }
-      if(!settings.activeId && settings.entries.some(x=>x.id===old.activeId)){
-        settings.activeId=old.activeId;save();await apply();
+      // Switch only after every local entry is safely available on the server.
+      if (!missing.length) {
+        const {entries, ...preferences} = settings;
+        settings = {...next, ...preferences};
+        shared = true;
+        localStorage.setItem(storageKey + ':shared', 'true');
+        save();
+        await apply();
       }
       info(missing.length ? '其余已导入。本浏览器缺少文件：'+missing.join('、') : '已有收藏已合并到酒馆字体库。');
     } catch(e){info(e.message,true);}finally{renderList();root.inert=false;}
@@ -615,10 +623,15 @@ async function boot() {
     }
   }
   try {
-    settings = await readShared();
-    settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
-    if(!['stroke','native'].includes(settings.previewBoldMode))settings.previewBoldMode='stroke';
-    shared = true;
+    const serverSettings = await readShared();
+    sharedAvailable = true;
+    const useServer = localStorage.getItem(storageKey + ':shared') === 'true';
+    if (useServer || !settings.entries.length) {
+      settings = serverSettings;
+      settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
+      if(!['stroke','native'].includes(settings.previewBoldMode))settings.previewBoldMode='stroke';
+      shared = true;
+    }
   }catch(e){console.warn('[Font Library]',e.message);}
   await apply().catch(e=>console.error('[Font Library]', e));
   if(createUI())return;
