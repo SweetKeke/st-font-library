@@ -1,4 +1,4 @@
-/* SillyTavern Font Library — v1.3.0 */
+/* SillyTavern Font Library — v1.3.1 */
 const EXT_KEY = 'kk_font_library_v1';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
@@ -191,8 +191,18 @@ function injectCSS(family) {
   const item = settings.entries.find(entry => entry.id === settings.activeId);
   const {weight, stroke, alpha} = weightStyle(item, settings.weight);
   const declaration = `font-family: ${quoteCss(family)}, sans-serif !important;`;
-  // Explicitly exclude this extension's configuration controls from global styling.
-  let rules = selectors.map(s => `${s}:not(#${PANEL_ID}):not(#${PANEL_ID} *) { ${declaration} }`).join('\n');
+  // Icon fonts also live on buttons, divs and spans, not just <i> elements.
+  // Let their own styles select the font, including inherited icon children.
+  const iconSelector = [
+    'i', 'svg', 'path', '.fa', '.fas', '.far', '.fab', '.fal', '.fad', '.fat',
+    '[class^="fa-"]', '[class*=" fa-"]', '[class^="fa "]',
+    '.material-icons', '.material-icons-outlined', '.material-icons-round',
+    '.material-icons-sharp', '.material-icons-two-tone',
+    '.material-symbols-outlined', '.material-symbols-rounded', '.material-symbols-sharp',
+    '.iconfont', '[data-icon]',
+  ].join(', ');
+  const excluded = `:not(#${PANEL_ID}, #${PANEL_ID} *, :is(${iconSelector}), :is(${iconSelector}) *)`;
+  let rules = selectors.map(s => `${s}${excluded} { ${declaration} }`).join('\n');
   if (settings.adjustBody) {
     let bodyStyle = `font-weight: ${weight};`;
     if (stroke) bodyStyle += ` -webkit-text-stroke-width: ${stroke}em;`;
