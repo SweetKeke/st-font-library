@@ -1,4 +1,4 @@
-/* SillyTavern Font Library — v1.3.2 */
+/* SillyTavern Font Library — v1.3.3 */
 const EXT_KEY = 'kk_font_library_v1';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
@@ -183,7 +183,8 @@ function cssSelectors(scope) {
     'body', 'body button', 'body input:not([type="checkbox"]):not([type="radio"])',
     'body textarea', 'body select', 'body .mes_text', 'body .mes_text *:not(i):not(svg):not(path)',
     'body .mes .name_text', 'body .mes .timestamp', 'body #chat',
-    'body #chat .mes .mes_block', 'body .drawer-content', 'body .menu_button'
+    'body #chat .mes .mes_block', 'body .drawer-content', 'body .menu_button',
+    'body .font-family-reset', 'body .options-content a', 'body .options-content span'
   ];
   return ['#chat .mes_text', '#chat .mes_text *:not(i):not(svg):not(path)', '#chat .mes .name_text'];
 }
