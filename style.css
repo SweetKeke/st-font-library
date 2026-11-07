@@ -68,6 +68,40 @@
   #kk-font-library-panel .kkfl-update-badge::before { animation: none; }
 }
 #kk-font-library-panel .kkfl-top {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+#kk-font-library-panel #kkfl-weight-hint { font-size: .78em; min-height: 1em; margin-top: -4px; }
+#kk-font-library-panel .kkfl-scope-note { font-size: .78em; margin-top: -2px; }
+#kk-font-library-panel .kkfl-scope-note.warn { color: #c47a4f; }
+
+#kk-font-library-panel .kkfl-range-wrap { position: relative; display: block; }
+#kk-font-library-panel .kkfl-range-wrap > input { position: relative; z-index: 1; }
+#kk-font-library-panel .kkfl-weight-mark {
+  /* a range thumb travels inset by half its width, so offset the tick the same way */
+  --kkfl-thumb: 10px;
+  position: absolute;
+  top: 50%;
+  left: calc(var(--kkfl-thumb) / 2 + (100% - var(--kkfl-thumb)) * var(--kkfl-p, 0.375));
+  width: 2px;
+  height: 10px;
+  margin: -5px 0 0 -1px;
+  border-radius: 1px;
+  background: color-mix(in srgb, currentColor 40%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+#kk-font-library-panel .kkfl-weight-mark[hidden] { display: none; }
+#kk-font-library-panel .kkfl-weight-chip {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: .78em;
+  font-weight: 500;
+  line-height: 1.6;
+  opacity: .7;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+#kk-font-library-panel .kkfl-weight-chip[hidden] { display: none; }
+
 #kk-font-library-panel .kkfl-io-row { display: flex; gap: 8px; }
 #kk-font-library-panel .kkfl-io-row button { flex: 1 1 0; min-width: 0; }
 #kk-font-library-panel #kkfl-update-extension {

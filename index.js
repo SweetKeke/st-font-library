@@ -1,7 +1,7 @@
-/* SillyTavern Font Library — v1.4.0 */
+/* SillyTavern Font Library — v1.5.0 */
 const EXT_KEY = 'kk_font_library_v1';
 // Keep in sync with manifest.json.
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -19,6 +19,8 @@ let storageKey;
 let activeFace;
 let activeFamily;
 let onlineBase;
+let onlineWeights = [];
+let onlineVariable = false;
 let currentToken = 0;
 const byId = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -169,39 +171,124 @@ function usesSimulatedWeight(item) {
 }
 function weightStyle(item, value) {
   const target = validWeight(value);
-  if (!usesSimulatedWeight(item)) return {weight:target, stroke:0, alpha:100};
-  const base = validWeight(item.type === 'remote' ? onlineBase : (item.fileWeight || 400));
-  const delta = (target - base) / 100;
-  // Soft saturation for CJK text: gradual bolding without excessive stroke buildup.
-  const stroke = delta > 0 ? 0.032 * (1 - Math.exp(-delta / 2.5)) : 0;
-  return {weight:base, stroke, alpha:100 + Math.min(0, delta) * 6};
-}
-function detectOnlineSingleWeight(family) {
-  const weights = [];
-  for (const face of document.fonts) {
-    if (face.family.replace(/^['"]|['"]$/g, '').toLowerCase() !== family.toLowerCase()) continue;
-    const raw = String(face.weight).trim().toLowerCase();
-    const values = raw === 'normal' ? [400] : raw === 'bold' ? [700] :
-      raw.split(/\s+/).map(Number);
-    if (!values.length || values.some(n => !Number.isFinite(n))) return undefined;
-    weights.push(...values);
+  if (!usesSimulatedWeight(item)) {
+    // The font ships real faces: use the closest one instead of faking the weight.
+    if (item && item.type === 'remote' && onlineWeights.length > 1) {
+      let best = onlineWeights[0];
+      for (const candidate of onlineWeights) {
+        const delta = Math.abs(candidate - target);
+        const bestDelta = Math.abs(best - target);
+        // Ties go to the heavier face, so the middle of the slider does not feel light.
+        if (delta < bestDelta || (delta === bestDelta && candidate > best)) best = candidate;
+      }
+      return {weight: best, stroke: 0, alpha: 100};
+    }
+    return {weight: target, stroke: 0, alpha: 100};
   }
-  return weights.length > 0 && weights.every(w => w === weights[0]) ? weights[0] : undefined;
+  const base = validWeight(item.type === 'remote' ? onlineBase : (item.fileWeight || 400));
+  if (target === base) return {weight: base, stroke: 0, alpha: 100};
+  if (target > base) {
+    // Browsers cannot synthesise weight upward without a bold face, so stretch the
+    // outline across the whole remaining range instead of saturating near the start.
+    const span = Math.max(100, 900 - base);
+    const amount = Math.min(1, (target - base) / span);
+    // A 700-weight face has far less room to grow than a 400 one, so scale the outline
+    // by that range. Linear growth keeps the low half soft instead of turning muddy.
+    const maxStroke = 0.06 * Math.min(1, span / 500);
+    return {weight: base, stroke: maxStroke * amount, alpha: 100};
+  }
+  // Nothing can thin a glyph in CSS, so fade it instead and spread that over the
+  // lower half of the slider so every step is visible.
+  const span = Math.max(100, base - 100);
+  const amount = Math.min(1, (base - target) / span);
+  return {weight: base, stroke: 0, alpha: 100 - 45 * amount};
 }
+function detectFamilyFaces(family) {
+  const wanted = family.replace(/^['"]|['"]$/g, '').toLowerCase();
+  const weights = new Set();
+  let variable = false;
+  for (const face of document.fonts) {
+    if (face.family.replace(/^['"]|['"]$/g, '').toLowerCase() !== wanted) continue;
+    const raw = String(face.weight).trim().toLowerCase();
+    if (raw === 'normal') { weights.add(400); continue; }
+    if (raw === 'bold') { weights.add(700); continue; }
+    const parts = raw.split(/\s+/).map(Number);
+    if (parts.length > 1 && parts.every(Number.isFinite)) { variable = true; continue; }
+    if (Number.isFinite(parts[0])) weights.add(parts[0]);
+  }
+  return {weights: [...weights].sort((a, b) => a - b), variable};
+}
+
 function updateBoldModeControls() {
   const row = byId('kkfl-bold-mode-row');
   if (!row) return;
   const item = settings.entries.find(x => x.id === settings.activeId);
   row.hidden = !settings.enabled || !usesSimulatedWeight(item);
 }
+function updateWeightHint() {
+  const el = byId('kkfl-weight-hint');
+  if (!el) return;
+  const item = settings.entries.find(entry => entry.id === settings.activeId);
+  if (!item || !settings.enabled) { el.textContent = ''; return; }
+  if (item.type === 'local' && item.variable) { el.textContent = '可变字体：100–900 为真实字重轴'; return; }
+  if (item.type === 'remote' && onlineVariable) { el.textContent = '可变字体：粗细为真实字重轴'; return; }
+  if (item.type === 'remote' && onlineWeights.length > 1) {
+    el.textContent = `该字体提供 ${onlineWeights.join(' / ')}，已使用真实字重`;
+    return;
+  }
+  const base = validWeight(item.type === 'remote' ? onlineBase : (item.fileWeight || 400));
+  el.textContent = `单字重（${base}）：粗细为描边 / 淡化模拟`;
+}
+
+function updateWeightMarker() {
+  const mark = byId('kkfl-weight-mark');
+  const chip = byId('kkfl-weight-chip');
+  if (!mark || !chip) return;
+  const item = settings.entries.find(entry => entry.id === settings.activeId);
+  if (!item || !settings.enabled) {
+    mark.hidden = true;
+    chip.hidden = true;
+    return;
+  }
+  chip.hidden = false;
+  if (item.type === 'local' && item.variable) {
+    mark.hidden = true;
+    chip.textContent = '可变 100–900';
+    return;
+  }
+  if (item.type === 'remote' && onlineVariable) {
+    mark.hidden = true;
+    chip.textContent = '可变字重';
+    return;
+  }
+  if (item.type === 'remote' && onlineWeights.length > 1) {
+    mark.hidden = true;
+    chip.textContent = '多字重';
+    return;
+  }
+  const base = validWeight(item.type === 'remote' ? (Number.isFinite(onlineBase) ? onlineBase : 400) : (item.fileWeight || 400));
+  mark.hidden = false;
+  mark.style.setProperty('--kkfl-p', String((base - 100) / 800));
+  mark.style.left = '';
+  chip.textContent = `原字重 ${base}`;
+}
+function updateWeightScopeNote() {
+  const el = byId('kkfl-weight-scope-note');
+  if (!el) return;
+  const mode = settings.weightScope;
+  el.classList.toggle('warn', mode === 'global');
+  el.textContent = mode === 'global'
+    ? '描边模拟会覆盖全站文字，可能明显增加渲染开销；卡的话切回「聊天正文」。'
+    : mode === 'chat'
+      ? '只在聊天正文描边，开销较小。'
+      : '不应用字重，没有额外渲染开销。';
+}
 function cssSelectors(scope) {
-  if (scope === 'global') return [
-    'body', 'body button', 'body input:not([type="checkbox"]):not([type="radio"])',
-    'body textarea', 'body select', 'body .mes_text', 'body .mes_text *:not(i):not(svg):not(path)',
-    'body .mes .name_text', 'body .mes .timestamp', 'body #chat',
-    'body #chat .mes .mes_block', 'body .drawer-content', 'body .menu_button',
-    'body .font-family-reset', 'body .options-content a', 'body .options-content span'
-  ];
+  if (scope === 'global') {
+    // Only touch what inherits from the tavern: <body> itself plus the --mainFontFamily
+    // variable. Anything that declares its own font-family keeps it.
+    return ['body'];
+  }
   return ['#chat .mes_text', '#chat .mes_text *:not(i):not(svg):not(path)', '#chat .mes .name_text'];
 }
 function injectCSS(family) {
@@ -240,6 +327,8 @@ function injectCSS(family) {
     if (alpha < 100) bodyStyle += ` -webkit-text-fill-color: color-mix(in srgb, currentColor ${alpha}%, transparent);`;
     rules += `\n@layer kkflDefaults { :where(#chat .mes_text) { ${bodyStyle} } }`;
   }
+  // The panel inherits stroke/fill from <body> in global mode; keep its own text crisp.
+  rules += `\n#${PANEL_ID} { -webkit-text-stroke-width: 0; -webkit-text-fill-color: currentColor; }`;
   const node = byId(STYLE_ID) || Object.assign(document.createElement('style'), { id: STYLE_ID });
   node.textContent = rules;
   if (!node.isConnected) document.head.append(node);
@@ -252,6 +341,8 @@ function clearApplied() {
   activeFace = undefined;
   activeFamily = undefined;
   onlineBase = undefined;
+  onlineWeights = [];
+  onlineVariable = false;
 }
 async function apply() {
   clearApplied();
@@ -268,10 +359,15 @@ async function apply() {
     link.href = item.url;
     link.onload = () => {
       if (token !== currentToken) return;
-      onlineBase = detectOnlineSingleWeight(family);
+      const faces = detectFamilyFaces(family);
+      onlineVariable = faces.variable;
+      onlineWeights = faces.weights;
+      onlineBase = faces.variable || faces.weights.length !== 1 ? undefined : faces.weights[0];
       injectCSS(family);
       updateBoldModeControls();
       updatePreview();
+      updateWeightHint();
+      updateWeightMarker();
     };
     document.head.append(link);
   } else {
@@ -298,6 +394,9 @@ async function apply() {
   injectCSS(family);
   setActiveLabel();
   updateBoldModeControls();
+  updateWeightHint();
+  updateWeightMarker();
+  updateWeightScopeNote();
 }
 function setActiveLabel() {
   const item = settings.entries.find(x => x.id === settings.activeId);
@@ -368,6 +467,9 @@ function renderList() {
   const out = byId('kkfl-weight-label'); if(out) out.textContent=String(settings.weight);
   const scope = byId('kkfl-scope'); if (scope) scope.value=settings.scope;
   updatePreview();
+  updateWeightHint();
+  updateWeightMarker();
+  updateWeightScopeNote();
 }
 function updatePreview(value = settings.weight) {
   const el = byId('kkfl-preview'); if (!el) return;
@@ -379,9 +481,12 @@ function updatePreview(value = settings.weight) {
   const nativeBold = settings.enabled && isStatic && settings.previewBoldMode === 'native' &&
     validWeight(value) > weight;
   el.style.filter = '';
-  el.style.webkitTextStrokeWidth = settings.enabled && !nativeBold && stroke ? stroke + 'em' : '';
+  // Never clear these: both properties inherit, so an empty inline value falls back to
+  // whatever the last committed weight left on <body>, which made the preview invert
+  // while dragging and only snap back on release.
+  el.style.webkitTextStrokeWidth = settings.enabled && !nativeBold && stroke ? stroke + 'em' : '0';
   el.style.webkitTextFillColor = settings.enabled && !nativeBold && alpha < 100
-    ? `color-mix(in srgb, currentColor ${alpha}%, transparent)` : '';
+    ? `color-mix(in srgb, currentColor ${alpha}%, transparent)` : 'currentColor';
   el.style.fontSynthesisWeight = nativeBold ? 'auto' : '';
   if (!item || !settings.enabled) {
     el.style.fontFamily = '';
@@ -526,9 +631,11 @@ function createUI() {
         <label><input id="kkfl-toggle" type="checkbox" /> 启用字体覆盖</label>
         <label for="kkfl-scope">字体应用范围</label><select id="kkfl-scope"><option value="chat">仅聊天正文与角色名</option><option value="global">主要酒馆界面和聊天内容</option></select>
         <label for="kkfl-weight-scope">字重应用范围</label><select id="kkfl-weight-scope"><option value="off">仅预览</option><option value="chat">聊天正文</option><option value="global">整个界面（全局）</option></select>
-        <label for="kkfl-weight">预览字重 <output id="kkfl-weight-label">400</output></label>
-        <input type="range" id="kkfl-weight" min="100" max="900" step="1" value="400" />
-        <div class="kkfl-muted">静态字体用描边模拟加粗，较轻的档位会淡化文字。拖动时可在下方预览。</div>
+        <div id="kkfl-weight-scope-note" class="kkfl-muted kkfl-scope-note"></div>
+        <label for="kkfl-weight">预览字重 <output id="kkfl-weight-label">400</output><span id="kkfl-weight-chip" class="kkfl-weight-chip" hidden></span></label>
+        <div class="kkfl-range-wrap"><span id="kkfl-weight-mark" class="kkfl-weight-mark" hidden></span><input type="range" id="kkfl-weight" min="100" max="900" step="1" value="400" /></div>
+        <div id="kkfl-weight-hint" class="kkfl-muted"></div>
+        <div class="kkfl-muted">静态字体用描边模拟加粗，变细则用淡化近似；滑块覆盖整个区间，拖动即可在下方预览。</div>
         <div class="kkfl-bold-mode-row" id="kkfl-bold-mode-row" hidden>
           <label for="kkfl-preview-bold-mode">单字重模拟加粗（仅预览）</label>
           <select id="kkfl-preview-bold-mode" aria-label="预览加粗方式">
@@ -641,6 +748,7 @@ function createUI() {
   byId('kkfl-toggle').addEventListener('change',e=>{settings.enabled=e.target.checked;save();apply().catch(e=>info(e.message,true));renderList();});
   byId('kkfl-weight-scope').addEventListener('change', e => {
     settings.weightScope = ['off', 'chat', 'global'].includes(e.target.value) ? e.target.value : 'off';
+    updateWeightScopeNote();
     if (activeFamily) injectCSS(activeFamily);
     save();
   });
