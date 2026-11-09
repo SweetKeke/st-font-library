@@ -1,7 +1,7 @@
-/* SillyTavern Font Library — v1.6.1 */
+/* SillyTavern Font Library — v1.6.2 */
 const EXT_KEY = 'kk_font_library_v1';
 // Keep in sync with manifest.json.
-const VERSION = '1.6.1';
+const VERSION = '1.6.2';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -29,28 +29,30 @@ const info = (m, error = false) => { const el = byId('kkfl-status'); if (el) { e
 const EXTENSION_ID = 'third-party/st-font-library';
 const EXTENSION_NAME = 'st-font-library';
 const UPDATE_CACHE_KEY = 'kkfl-update-check';
+let updateBusy = false;
+let updateAbort = null;
 async function extensionTarget() {
   const { extensionTypes } = await import('/scripts/extensions.js');
   const type = extensionTypes[EXTENSION_ID];
   if (!['local', 'global'].includes(type)) throw new Error('未能识别字体库的安装位置，请通过「管理扩展程序」更新。');
   return { extensionName: EXTENSION_NAME, global: type === 'global' };
 }
-async function extensionRequest(path, payload, timeout = 20000) {
+async function extensionRequest(path, payload, timeout = 20000, controller = null) {
   // The server runs a real git fetch here; without a timeout the button can hang forever.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  const ctrl = controller || new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
     const response = await fetch('/api/extensions/' + path, {
       method: 'POST',
       headers: window.SillyTavern.getContext().getRequestHeaders(),
       body: JSON.stringify(payload),
-      signal: controller.signal,
+      signal: ctrl.signal,
     });
     if (!response.ok) throw new Error('更新请求失败（HTTP ' + response.status + '）。请检查酒馆终端日志。');
     return await response.json();
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw new Error('请求超时。酒馆访问 GitHub 可能较慢，请稍后重试；若刚才已经更新过，直接刷新页面即可。');
+      throw new Error('请求超时或已取消。酒馆访问 GitHub 可能较慢，请稍后重试；若刚才已经更新过，直接刷新页面即可。');
     }
     throw error;
   } finally {
@@ -63,11 +65,12 @@ function setUpdateBadge(visible) {
 }
 // Quiet check on load: the hint sits next to the update button, never a popup.
 async function checkForUpdates() {
+  if (updateBusy) return;
   try {
     const cached = sessionStorage.getItem(UPDATE_CACHE_KEY);
     if (cached) {
       const { at, stale } = JSON.parse(cached);
-      if (Date.now() - at < 10 * 60 * 1000) { setUpdateBadge(Boolean(stale)); return; }
+      if (Date.now() - at < 30 * 60 * 1000) { setUpdateBadge(Boolean(stale)); return; }
     }
     const version = await extensionRequest('version', await extensionTarget());
     const stale = Boolean(version.currentCommitHash) && !version.isUpToDate;
@@ -746,20 +749,34 @@ function createUI() {
   });
   byId('kkfl-update-extension').addEventListener('click', async () => {
     const button = byId('kkfl-update-extension');
+    if (updateBusy) {
+      // Second click cancels the wait; the server may still finish in the background.
+      updateAbort?.abort();
+      return;
+    }
     const original = button.innerHTML;
-    button.disabled = true;
-    button.textContent = '正在更新…';
+    updateBusy = true;
+    updateAbort = new AbortController();
+    const started = Date.now();
+    const tick = setInterval(() => {
+      const seconds = Math.round((Date.now() - started) / 1000);
+      button.textContent = `正在更新… ${seconds}s（点击取消）`;
+    }, 1000);
+    button.textContent = '正在更新… 0s（点击取消）';
+    let succeeded = false;
     try {
       const target = await extensionTarget();
-      // /update already checks the repo before pulling, so the extra version round-trip
-      // only doubled the slow server-side git fetch.
-      const result = await extensionRequest('update', target, 90000);
+      // /update already checks the repo before pulling, so an extra version round-trip
+      // would only double the slow server-side git fetch.
+      const result = await extensionRequest('update', target, 120000, updateAbort);
       if (result.isUpToDate) {
         setUpdateBadge(false);
         sessionStorage.setItem(UPDATE_CACHE_KEY, JSON.stringify({ at: Date.now(), stale: false }));
         info('字体库已经是最新版本。');
         return;
       }
+      succeeded = true;
+      button.disabled = true;
       sessionStorage.removeItem(UPDATE_CACHE_KEY);
       setUpdateBadge(false);
       info('字体库已更新至 ' + result.shortCommitHash + '，正在刷新…');
@@ -772,9 +789,15 @@ function createUI() {
       return;
     } catch (error) {
       info('字体库更新失败：' + error.message, true);
+    } finally {
+      clearInterval(tick);
+      updateBusy = false;
+      updateAbort = null;
+      if (!succeeded) {
+        button.innerHTML = original;
+        button.disabled = false;
+      }
     }
-    button.innerHTML = original;
-    button.disabled = false;
   });
   byId('kkfl-page-size').addEventListener('change', e => {
     const n = Math.round(Number(e.target.value));
