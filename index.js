@@ -1,7 +1,7 @@
-/* SillyTavern Font Library — v1.6.3 */
+/* SillyTavern Font Library — v1.7.0 */
 const EXT_KEY = 'kk_font_library_v1';
 // Keep in sync with manifest.json.
-const VERSION = '1.6.3';
+const VERSION = '1.7.0';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -12,7 +12,7 @@ const PREVIEW_SAMPLES = {
   en: '“Still awake?” The quick brown fox jumps over the lazy dog!',
   ko: '창가에 달빛이 비쳤다. “그 편지, 아직 기억해?”',
 };
-const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, weightScope: 'off', scope: 'chat', pageSize: 10, previewBoldMode: 'stroke' };
+const DEFAULTS = { entries: [], activeId: '', enabled: true, weight: 400, weightScope: 'off', scope: 'chat', pageSize: 10, previewBoldMode: 'stroke', previewLanguage: 'zh-CN', customSample: '' };
 let settings, save;
 let currentPage = 1;
 let storageKey;
@@ -711,8 +711,10 @@ function createUI() {
             <option value="zh-CN">中文</option><option value="ja">日本語</option>
             <option value="en">English</option><option value="ko">한국어</option>
             <option value="all">多语对照</option>
+                      <option value="custom">自定义</option>
           </select>
         </div>
+        <input id="kkfl-custom-sample" class="kkfl-custom-sample" type="text" placeholder="输入自定义预览文字" hidden />
         <div class="kkfl-title kkfl-list-title">已添加字体</div><div id="kkfl-list"></div>
         <div class="kkfl-pagination">
           <label for="kkfl-page-size">每页显示</label>
@@ -740,8 +742,18 @@ function createUI() {
     </div>`;
   host.append(root);
   const language = byId('kkfl-preview-language');
+  const customInput = byId('kkfl-custom-sample');
   const preview = byId('kkfl-preview');
+  language.value = settings.previewLanguage;
+  customInput.value = settings.customSample;
+  customInput.hidden = language.value !== 'custom';
   function showSample() {
+    if (language.value === 'custom') {
+      const line = document.createElement('div');
+      line.textContent = settings.customSample || PREVIEW_SAMPLES['zh-CN'];
+      preview.replaceChildren(line, document.createTextNode('0123456789'));
+      return;
+    }
     const codes = language.value === 'all' ? Object.keys(PREVIEW_SAMPLES) : [language.value];
     const lines = codes.map(code => {
       const line = document.createElement('div');
@@ -751,7 +763,17 @@ function createUI() {
     });
     preview.replaceChildren(...lines, document.createTextNode('0123456789'));
   }
-  language.addEventListener('change', showSample);
+  language.addEventListener('change', () => {
+    settings.previewLanguage = language.value;
+    customInput.hidden = language.value !== 'custom';
+    save();
+    showSample();
+  });
+  customInput.addEventListener('input', () => {
+    settings.customSample = customInput.value;
+    save();
+    showSample();
+  });
   showSample();
   byId('kkfl-export').addEventListener('click', () => { exportCollection().catch(error => info('导出失败：' + error.message, true)); });
   byId('kkfl-import').addEventListener('click', () => byId('kkfl-import-file').click());
@@ -936,6 +958,8 @@ async function boot() {
   if(!['chat','global','all'].includes(settings.scope))settings.scope='chat';
   if(!['off','chat','global'].includes(settings.weightScope)) settings.weightScope='off';
   if(!['stroke','native'].includes(settings.previewBoldMode))settings.previewBoldMode='stroke';
+  if(!['zh-CN','ja','en','ko','all','custom'].includes(settings.previewLanguage)) settings.previewLanguage='zh-CN';
+  if(typeof settings.customSample !== 'string') settings.customSample='';
   settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
   save = () => localStorage.setItem(storageKey, JSON.stringify(settings));
   if (sharedPrefs) save();

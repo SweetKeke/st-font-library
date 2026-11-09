@@ -68,6 +68,8 @@
   #kk-font-library-panel .kkfl-update-badge::before { animation: none; }
 }
 #kk-font-library-panel .kkfl-top {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+#kk-font-library-panel .kkfl-custom-sample { margin-top: 4px; }
+
 #kk-font-library-panel #kkfl-weight-hint { font-size: .78em; min-height: 1em; margin-top: -4px; }
 #kk-font-library-panel .kkfl-scope-note { font-size: .78em; margin-top: -2px; }
 #kk-font-library-panel .kkfl-scope-note.warn { color: #c47a4f; }
