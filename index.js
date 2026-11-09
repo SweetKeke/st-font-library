@@ -1,7 +1,7 @@
-/* SillyTavern Font Library — v1.5.1 */
+/* SillyTavern Font Library — v1.6.0 */
 const EXT_KEY = 'kk_font_library_v1';
 // Keep in sync with manifest.json.
-const VERSION = '1.5.1';
+const VERSION = '1.6.0';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -296,7 +296,19 @@ function updateWeightScopeNote() {
       ? '只在聊天正文描边，开销较小。'
       : '不应用字重，没有额外渲染开销。';
 }
+function updateScopeNote() {
+  const el = byId('kkfl-scope-note');
+  if (!el) return;
+  const mode = settings.scope;
+  el.classList.toggle('warn', mode === 'all');
+  el.textContent = mode === 'all'
+    ? '强制覆盖所有元素（图标与代码块除外）；可能影响其它扩展排版，与同类插件同权重、谁后加载谁生效。'
+    : mode === 'global'
+      ? '跟随酒馆默认字；插件自带字体保持原样。'
+      : '只影响聊天正文与角色名。';
+}
 function cssSelectors(scope) {
+  if (scope === 'all') return ['*'];
   if (scope === 'global') {
     // Only touch what inherits from the tavern: <body> itself plus the --mainFontFamily
     // variable. Anything that declares its own font-family keeps it.
@@ -320,12 +332,14 @@ function injectCSS(family) {
     '.material-symbols-outlined', '.material-symbols-rounded', '.material-symbols-sharp',
     '.iconfont', '[data-icon]',
   ].join(', ');
-  const excluded = `:not(#${PANEL_ID}, #${PANEL_ID} *, :is(${iconSelector}), :is(${iconSelector}) *)`;
+  const codeSelector = 'code, kbd, samp, pre, .hljs';
+  const codeExcluded = settings.scope === 'all' ? `, ${codeSelector}, ${codeSelector} *` : '';
+  const excluded = `:not(#${PANEL_ID}, #${PANEL_ID} *, :is(${iconSelector}), :is(${iconSelector}) *${codeExcluded})`;
   let rules = selectors.map(s => `${s}${excluded} { ${declaration} }`).join('\n');
   // Widgets such as the prompt list (<ul id="completion_prompt_manager_list"
   // class="text_pole">) read their font from --mainFontFamily instead of
   // inheriting it, so overriding body alone leaves whole panels on the theme font.
-  if (settings.scope === 'global') {
+  if (settings.scope !== 'chat') {
     rules += `\n:root, body { --mainFontFamily: ${familyList} !important; }`;
   }
   if (settings.weightScope === 'global') {
@@ -410,6 +424,7 @@ async function apply() {
   updateWeightHint();
   updateWeightMarker();
   updateWeightScopeNote();
+  updateScopeNote();
 }
 function setActiveLabel() {
   const item = settings.entries.find(x => x.id === settings.activeId);
@@ -483,6 +498,7 @@ function renderList() {
   updateWeightHint();
   updateWeightMarker();
   updateWeightScopeNote();
+  updateScopeNote();
 }
 function updatePreview(value = settings.weight) {
   const el = byId('kkfl-preview'); if (!el) return;
@@ -642,7 +658,8 @@ function createUI() {
         <div class="kkfl-io-row"><button id="kkfl-export" type="button" class="menu_button">导出收藏</button><button id="kkfl-import" type="button" class="menu_button">导入收藏</button><input id="kkfl-import-file" type="file" accept=".json,application/json" hidden /></div>
         <div class="kkfl-top"><span id="kkfl-current"></span></div>
         <label><input id="kkfl-toggle" type="checkbox" /> 启用字体覆盖</label>
-        <label for="kkfl-scope">字体应用范围</label><select id="kkfl-scope"><option value="chat">仅聊天正文与角色名</option><option value="global">主要酒馆界面和聊天内容</option></select>
+        <label for="kkfl-scope">字体应用范围</label><select id="kkfl-scope"><option value="chat">仅聊天正文与角色名</option><option value="global">主要酒馆界面和聊天内容</option><option value="all">全覆盖（强制插件自带字体）</option></select>
+        <div id="kkfl-scope-note" class="kkfl-muted kkfl-scope-note"></div>
         <label for="kkfl-weight-scope">字重应用范围</label><select id="kkfl-weight-scope"><option value="off">仅预览</option><option value="chat">聊天正文</option><option value="global">整个界面（全局）</option></select>
         <div id="kkfl-weight-scope-note" class="kkfl-muted kkfl-scope-note"></div>
         <label for="kkfl-weight">预览字重 <output id="kkfl-weight-label">400</output><span id="kkfl-weight-chip" class="kkfl-weight-chip" hidden></span></label>
@@ -789,7 +806,8 @@ function createUI() {
     save();
   });
   byId('kkfl-scope').addEventListener('change',e=>{
-    settings.scope = e.target.value;
+    settings.scope = ['chat','global','all'].includes(e.target.value) ? e.target.value : 'chat';
+    updateScopeNote();
     if (activeFamily) injectCSS(activeFamily);
     save();
   });
@@ -855,7 +873,7 @@ async function boot() {
   }
   for (const [k,v] of Object.entries(DEFAULTS)) if (!(k in settings)) settings[k]=structuredClone(v);
   if(!Array.isArray(settings.entries))settings.entries=[];
-  if(!['chat','global'].includes(settings.scope))settings.scope='chat';
+  if(!['chat','global','all'].includes(settings.scope))settings.scope='chat';
   if(!['off','chat','global'].includes(settings.weightScope)) settings.weightScope='off';
   if(!['stroke','native'].includes(settings.previewBoldMode))settings.previewBoldMode='stroke';
   settings.pageSize = Math.max(1, Math.min(100, Math.round(Number(settings.pageSize) || 10)));
