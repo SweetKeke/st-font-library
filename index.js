@@ -1,7 +1,7 @@
-/* SillyTavern Font Library — v1.6.2 */
+/* SillyTavern Font Library — v1.6.3 */
 const EXT_KEY = 'kk_font_library_v1';
 // Keep in sync with manifest.json.
-const VERSION = '1.6.2';
+const VERSION = '1.6.3';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -57,6 +57,20 @@ async function extensionRequest(path, payload, timeout = 20000, controller = nul
     throw error;
   } finally {
     clearTimeout(timer);
+  }
+}
+// The update endpoint can stall after a successful pull (it fetches again before replying),
+// so watch the served files instead of trusting the response.
+async function extensionFileStamp() {
+  try {
+    const response = await fetch(`/scripts/extensions/${EXTENSION_ID}/index.js?ts=${Date.now()}`, {
+      method: 'HEAD',
+      cache: 'no-store',
+    });
+    if (!response.ok) return '';
+    return response.headers.get('last-modified') || response.headers.get('etag') || '';
+  } catch {
+    return '';
   }
 }
 function setUpdateBadge(visible) {
@@ -757,6 +771,7 @@ function createUI() {
     const original = button.innerHTML;
     updateBusy = true;
     updateAbort = new AbortController();
+    const baseline = await extensionFileStamp();
     const started = Date.now();
     const tick = setInterval(() => {
       const seconds = Math.round((Date.now() - started) / 1000);
@@ -764,6 +779,16 @@ function createUI() {
     }, 1000);
     button.textContent = '正在更新… 0s（点击取消）';
     let succeeded = false;
+    const watcher = baseline ? setInterval(async () => {
+      const stamp = await extensionFileStamp();
+      if (!stamp || stamp === baseline) return;
+      clearInterval(watcher);
+      succeeded = true;
+      button.disabled = true;
+      button.textContent = '已更新，正在刷新…';
+      info('检测到插件文件已更新，正在刷新…');
+      setTimeout(() => location.reload(), 400);
+    }, 2500) : 0;
     try {
       const target = await extensionTarget();
       // /update already checks the repo before pulling, so an extra version round-trip
@@ -790,6 +815,7 @@ function createUI() {
     } catch (error) {
       info('字体库更新失败：' + error.message, true);
     } finally {
+      clearInterval(watcher);
       clearInterval(tick);
       updateBusy = false;
       updateAbort = null;
