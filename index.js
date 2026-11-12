@@ -1,7 +1,7 @@
-/* SillyTavern Font Library — v1.7.0 */
+/* SillyTavern Font Library — v1.7.1 */
 const EXT_KEY = 'kk_font_library_v1';
 // Keep in sync with manifest.json.
-const VERSION = '1.7.0';
+const VERSION = '1.7.1';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -683,7 +683,7 @@ function createUI() {
   root.innerHTML=`
     <div class="inline-drawer">
       <div class="inline-drawer-toggle inline-drawer-header"><b>字体收藏夹 · Font Library</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>
-      <div class="inline-drawer-content kkfl-content">
+      <div class="inline-drawer-content"><div class="kkfl-content">
         <div class="kkfl-update-row"><span class="kkfl-update-label">字体库管理<small id="kkfl-version" class="kkfl-version" title="当前安装的字体库版本"></small></span><span class="kkfl-update-side"><span id="kkfl-update-badge" class="kkfl-update-badge" hidden>有新版本</span><button id="kkfl-update-extension" type="button" class="menu_button" title="检查并更新字体库插件"><i class="fa-solid fa-rotate" aria-hidden="true"></i> 更新插件</button></span></div>
         <div class="kkfl-io-row"><button id="kkfl-export" type="button" class="menu_button">导出收藏</button><button id="kkfl-import" type="button" class="menu_button">导入收藏</button><input id="kkfl-import-file" type="file" accept=".json,application/json" hidden /></div>
         <div class="kkfl-top"><span id="kkfl-current"></span></div>
@@ -738,6 +738,7 @@ function createUI() {
           <label for="kkfl-file-weight">普通字体文件的原始字重</label><select id="kkfl-file-weight"><option value="400">400 常规</option><option value="100">100</option><option value="200">200</option><option value="300">300</option><option value="500">500</option><option value="600">600</option><option value="700">700 粗体</option><option value="800">800</option><option value="900">900</option></select>
           <button type="button" id="kkfl-add-local" disabled>添加本地字体</button>
         </div><div id="kkfl-status" role="status" aria-live="polite"></div>
+        </div>
       </div>
     </div>`;
   host.append(root);
