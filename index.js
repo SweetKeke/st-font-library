@@ -1,7 +1,7 @@
-/* SillyTavern Font Library — v1.7.1 */
+/* SillyTavern Font Library — v1.7.2 */
 const EXT_KEY = 'kk_font_library_v1';
 // Keep in sync with manifest.json.
-const VERSION = '1.7.1';
+const VERSION = '1.7.2';
 const DB_NAME = 'kk-st-font-library';
 const STORE = 'fonts';
 const STYLE_ID = 'kk-font-library-applied';
@@ -237,7 +237,7 @@ function weightStyle(item, value) {
     const amount = Math.min(1, (target - base) / span);
     // A 700-weight face has far less room to grow than a 400 one, so scale the outline
     // by that range. Linear growth keeps the low half soft instead of turning muddy.
-    const maxStroke = 0.06 * Math.min(1, span / 500);
+    const maxStroke = 0.045 * Math.min(1, span / 500);
     return {weight: base, stroke: maxStroke * amount, alpha: 100};
   }
   // Nothing can thin a glyph in CSS, so fade it instead and spread that over the
@@ -376,11 +376,13 @@ function injectCSS(family) {
     // Same treatment as the chat body, but on every element the font covers.
     const weightRules = [`font-weight: ${weight} !important;`];
     if (stroke) weightRules.push(`-webkit-text-stroke-width: ${stroke}em;`);
+    if (stroke) weightRules.push('text-shadow: none !important;');
     if (alpha < 100) weightRules.push(`-webkit-text-fill-color: color-mix(in srgb, currentColor ${alpha}%, transparent);`);
     rules += '\n' + cssSelectors('global').map(s => `${s}${excluded} { ${weightRules.join(' ')} }`).join('\n');
   } else if (settings.weightScope === 'chat') {
     let bodyStyle = `font-weight: ${weight};`;
     if (stroke) bodyStyle += ` -webkit-text-stroke-width: ${stroke}em;`;
+    if (stroke) bodyStyle += ' text-shadow: none !important;';
     if (alpha < 100) bodyStyle += ` -webkit-text-fill-color: color-mix(in srgb, currentColor ${alpha}%, transparent);`;
     rules += `\n@layer kkflDefaults { :where(#chat .mes_text) { ${bodyStyle} } }`;
   }
@@ -544,6 +546,7 @@ function updatePreview(value = settings.weight) {
   // whatever the last committed weight left on <body>, which made the preview invert
   // while dragging and only snap back on release.
   el.style.webkitTextStrokeWidth = settings.enabled && !nativeBold && stroke ? stroke + 'em' : '0';
+  el.style.textShadow = settings.enabled && !nativeBold && stroke ? 'none' : '';
   el.style.webkitTextFillColor = settings.enabled && !nativeBold && alpha < 100
     ? `color-mix(in srgb, currentColor ${alpha}%, transparent)` : 'currentColor';
   el.style.fontSynthesisWeight = nativeBold ? 'auto' : '';
